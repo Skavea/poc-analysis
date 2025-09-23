@@ -7,10 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { StockAnalysisService } from '@/lib/stockAnalysisService';
-import { neon } from '@neondatabase/serverless';
-
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_yEFj57ApYTDl@ep-green-base-agls4wca-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-const sql = neon(databaseUrl);
+import { DatabaseService } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {

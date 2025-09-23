@@ -6,11 +6,7 @@
  * Can be called from the website to add new stocks and run analysis
  */
 
-import { neon } from '@neondatabase/serverless';
-
-// Database connection
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_yEFj57ApYTDl@ep-green-base-agls4wca-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-const sql = neon(databaseUrl);
+import { DatabaseService } from './db';
 
 export class StockAnalysisService {
   private static instance: StockAnalysisService;
@@ -67,20 +63,19 @@ export class StockAnalysisService {
     const totalPoints = Object.keys(data).length;
     const date = new Date().toISOString().split('T')[0];
 
-    await sql`
-      INSERT INTO stock_data (symbol, date, data, total_points)
-      VALUES (${symbol.toUpperCase()}, ${date}, ${JSON.stringify(data)}, ${totalPoints})
-      ON CONFLICT (symbol, date) DO UPDATE SET
-        data = EXCLUDED.data,
-        total_points = EXCLUDED.total_points,
-        created_at = CURRENT_TIMESTAMP
-    `;
+    await DatabaseService.upsertStockData({
+      id: `${symbol.toUpperCase()}_${date}`,
+      symbol: symbol.toUpperCase(),
+      date,
+      data,
+      totalPoints
+    });
   }
 
   /**
    * Extract segments from stock data
    */
-  extractSegments(symbol: string, data: any): Array<{
+  public extractSegments(symbol: string, data: any): Array<{
     id: string;
     symbol: string;
     date: string;
@@ -209,26 +204,21 @@ export class StockAnalysisService {
    */
   async saveAnalysisResults(segments: any[]): Promise<void> {
     for (const segment of segments) {
-      await sql`
-        INSERT INTO analysis_results (
-          id, symbol, date, segment_start, segment_end, point_count,
-          x0, min_price, max_price, average_price, trend_direction, points_data
-        ) VALUES (
-          ${segment.id},
-          ${segment.symbol},
-          ${segment.date},
-          ${segment.segment_start},
-          ${segment.segment_end},
-          ${segment.point_count},
-          ${segment.x0},
-          ${segment.min_price},
-          ${segment.max_price},
-          ${segment.average_price},
-          ${segment.trend_direction},
-          ${JSON.stringify(segment.points_data)}
-        )
-        ON CONFLICT (id) DO NOTHING
-      `;
+      await DatabaseService.createAnalysisResult({
+        id: segment.id,
+        symbol: segment.symbol,
+        date: segment.date,
+        segmentStart: segment.segment_start,
+        segmentEnd: segment.segment_end,
+        pointCount: segment.point_count,
+        x0: segment.x0.toString(),
+        minPrice: segment.min_price.toString(),
+        maxPrice: segment.max_price.toString(),
+        averagePrice: segment.average_price.toString(),
+        trendDirection: segment.trend_direction,
+        schemaType: 'UNCLASSIFIED',
+        pointsData: segment.points_data
+      });
     }
   }
 
