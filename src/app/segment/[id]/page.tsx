@@ -10,7 +10,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { DatabaseService } from '@/lib/database';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Dot } from 'recharts';
 import { TrendingUp, TrendingDown, Clock, BarChart3, Save, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -67,6 +67,9 @@ interface ChartDataPoint {
   low: number;
   close: number;
   volume: number;
+  isX0?: boolean;
+  isMin?: boolean;
+  isMax?: boolean;
 }
 
 interface SegmentData {
@@ -89,7 +92,9 @@ export default function SegmentPage({ params }: SegmentPageProps) {
   const loadSegmentData = async () => {
     try {
       setLoading(true);
+      console.log('Loading segment data for ID:', resolvedParams.id);
       const data = await DatabaseService.getSegmentData(resolvedParams.id);
+      console.log('Segment data loaded:', data);
       setSegmentData(data);
       if (data) {
         setSchemaType(data.analysis.schema_type);
@@ -146,6 +151,62 @@ export default function SegmentPage({ params }: SegmentPageProps) {
       hour12: false
     });
   };
+
+  // Custom dot component for x0
+  const X0Dot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload?.isX0) {
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={6} fill="#EF4444" stroke="#FFFFFF" strokeWidth={2} />
+          <text x={cx} y={cy - 12} textAnchor="middle" fontSize="10" fill="#EF4444" fontWeight="bold">
+            x0
+          </text>
+        </g>
+      );
+    }
+    return null;
+  };
+
+  // Custom dot component for min/max
+  const MinMaxDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload?.isMin) {
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={4} fill="#10B981" stroke="#FFFFFF" strokeWidth={2} />
+          <text x={cx} y={cy - 10} textAnchor="middle" fontSize="8" fill="#10B981" fontWeight="bold">
+            min
+          </text>
+        </g>
+      );
+    }
+    if (payload?.isMax) {
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={4} fill="#8B5CF6" stroke="#FFFFFF" strokeWidth={2} />
+          <text x={cx} y={cy - 10} textAnchor="middle" fontSize="8" fill="#8B5CF6" fontWeight="bold">
+            max
+          </text>
+        </g>
+      );
+    }
+    return null;
+  };
+
+  // Enhance chart data with markers
+  const enhancedChartData = segmentData ? segmentData.chartData.map((point, index) => {
+    const isLast = index === segmentData.chartData.length - 1;
+    const isMin = Number(point.close) === Number(segmentData.analysis.min_price);
+    const isMax = Number(point.close) === Number(segmentData.analysis.max_price);
+    
+    return {
+      ...point,
+      isX0: isLast,
+      isMin,
+      isMax
+    };
+  }) : [];
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -228,16 +289,18 @@ export default function SegmentPage({ params }: SegmentPageProps) {
 
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                  <LineChart data={enhancedChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis 
                       dataKey="timestamp" 
                       tickFormatter={formatTime}
                       tick={{ fontSize: 12 }}
+                      stroke="#6B7280"
                     />
                     <YAxis 
                       domain={['dataMin - 0.5', 'dataMax + 0.5']}
                       tick={{ fontSize: 12 }}
+                      stroke="#6B7280"
                     />
                     <Tooltip 
                       labelFormatter={(value) => formatTime(value)}
@@ -245,16 +308,87 @@ export default function SegmentPage({ params }: SegmentPageProps) {
                         `$${Number(value).toFixed(2)}`,
                         name === 'close' ? 'Price' : name
                       ]}
+                      contentStyle={{
+                        backgroundColor: '#F9FAFB',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '8px'
+                      }}
                     />
+                    
+                    {/* Reference line for average price */}
+                    <ReferenceLine 
+                      y={Number(segmentData.analysis.average_price)} 
+                      stroke="#F59E0B" 
+                      strokeDasharray="5 5"
+                      strokeWidth={2}
+                      label={{ value: "Avg", position: "topRight", fill: "#F59E0B", fontSize: 12 }}
+                    />
+                    
+                    {/* Reference line for min price */}
+                    <ReferenceLine 
+                      y={Number(segmentData.analysis.min_price)} 
+                      stroke="#10B981" 
+                      strokeDasharray="2 2"
+                      strokeWidth={1}
+                      label={{ value: "Min", position: "topLeft", fill: "#10B981", fontSize: 10 }}
+                    />
+                    
+                    {/* Reference line for max price */}
+                    <ReferenceLine 
+                      y={Number(segmentData.analysis.max_price)} 
+                      stroke="#8B5CF6" 
+                      strokeDasharray="2 2"
+                      strokeWidth={1}
+                      label={{ value: "Max", position: "topLeft", fill: "#8B5CF6", fontSize: 10 }}
+                    />
+                    
+                    {/* Main price line */}
                     <Line 
                       type="monotone" 
                       dataKey="close" 
                       stroke="#3B82F6" 
-                      strokeWidth={2}
+                      strokeWidth={3}
                       dot={false}
+                      activeDot={{ r: 4, fill: '#3B82F6' }}
+                    />
+                    
+                    {/* Custom dots for special points */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="close" 
+                      stroke="transparent" 
+                      strokeWidth={0}
+                      dot={<X0Dot />}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="close" 
+                      stroke="transparent" 
+                      strokeWidth={0}
+                      dot={<MinMaxDot />}
                     />
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+              
+              {/* Chart Legend */}
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-6 text-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <span className="text-gray-600">x0 (Last Point)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-0.5 bg-amber-500" style={{borderTop: '2px dashed #F59E0B'}}></div>
+                  <span className="text-gray-600">Average Price</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <span className="text-gray-600">Min Price</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <span className="text-gray-600">Max Price</span>
+                </div>
               </div>
             </div>
           </div>
