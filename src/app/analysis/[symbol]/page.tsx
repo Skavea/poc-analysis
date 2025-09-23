@@ -36,7 +36,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'enhanced' | 'not_enhanced'>('all');
+  const [filter, setFilter] = useState<'all' | 'R' | 'V' | 'UNCLASSIFIED'>('all');
   const [hasExistingAnalysis, setHasExistingAnalysis] = useState(false);
 
   useEffect(() => {
@@ -106,18 +106,13 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
   };
 
   const filteredResults = analysisResults.filter(result => {
-    switch (filter) {
-      case 'enhanced':
-        return result.enhanced;
-      case 'not_enhanced':
-        return !result.enhanced;
-      default:
-        return true;
-    }
+    if (filter === 'all') return true;
+    return result.schema_type === filter;
   });
 
-  const enhancedCount = analysisResults.filter(r => r.enhanced).length;
-  const notEnhancedCount = analysisResults.filter(r => !r.enhanced).length;
+  const rCount = analysisResults.filter(r => r.schema_type === 'R').length;
+  const vCount = analysisResults.filter(r => r.schema_type === 'V').length;
+  const unclassifiedCount = analysisResults.filter(r => r.schema_type === 'UNCLASSIFIED').length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -188,31 +183,38 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                   onChange={(e: any) => setFilter(e.target.value as any)}
                 >
                   <option value="all">All ({analysisResults.length})</option>
-                  <option value="enhanced">Enhanced ({enhancedCount})</option>
-                  <option value="not_enhanced">Not Enhanced ({notEnhancedCount})</option>
+                  <option value="R">R Schema ({rCount})</option>
+                  <option value="V">V Schema ({vCount})</option>
+                  <option value="UNCLASSIFIED">Unclassified ({unclassifiedCount})</option>
                 </ClientOnlySelect>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center p-3 bg-blue-50 rounded-lg">
               <div className="text-2xl font-bold text-blue-600">
                 {analysisResults.length}
               </div>
               <div className="text-sm text-blue-600">Total Segments</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {enhancedCount}
+            <div className="text-center p-3 bg-red-50 rounded-lg">
+              <div className="text-2xl font-bold text-red-600">
+                {rCount}
               </div>
-              <div className="text-sm text-green-600">Enhanced</div>
+              <div className="text-sm text-red-600">R Schema</div>
+            </div>
+            <div className="text-center p-3 bg-purple-50 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600">
+                {vCount}
+              </div>
+              <div className="text-sm text-purple-600">V Schema</div>
             </div>
             <div className="text-center p-3 bg-gray-50 rounded-lg">
               <div className="text-2xl font-bold text-gray-600">
-                {notEnhancedCount}
+                {unclassifiedCount}
               </div>
-              <div className="text-sm text-gray-600">Not Enhanced</div>
+              <div className="text-sm text-gray-600">Unclassified</div>
             </div>
           </div>
         </div>
@@ -250,18 +252,19 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {result.enhanced ? (
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        Enhanced
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
-                        Not Enhanced
+                    {result.schema_type === 'R' && (
+                      <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
+                        R
                       </span>
                     )}
-                    {result.schema_type && (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                        {result.schema_type}
+                    {result.schema_type === 'V' && (
+                      <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                        V
+                      </span>
+                    )}
+                    {result.schema_type === 'UNCLASSIFIED' && (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                        Unclassified
                       </span>
                     )}
                   </div>

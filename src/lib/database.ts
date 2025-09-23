@@ -34,8 +34,8 @@ export interface AnalysisResult {
   max_price: number;
   average_price: number;
   trend_direction: 'UP' | 'DOWN';
-  enhanced: boolean;
-  schema_type: 'R' | 'V' | null;
+  schema_type: 'R' | 'V' | 'UNCLASSIFIED';
+  points_data: any;
   created_at: string;
 }
 
@@ -91,7 +91,7 @@ export class DatabaseService {
     const results = await sql`
       SELECT * FROM analysis_results 
       WHERE symbol = ${symbol.toUpperCase()}
-      ORDER BY enhanced DESC, created_at DESC
+      ORDER BY schema_type DESC, created_at DESC
     `;
     return results as AnalysisResult[];
   }
@@ -102,7 +102,7 @@ export class DatabaseService {
   static async getAllAnalysisResults(): Promise<AnalysisResult[]> {
     const results = await sql`
       SELECT * FROM analysis_results 
-      ORDER BY enhanced DESC, created_at DESC
+      ORDER BY schema_type DESC, created_at DESC
     `;
     return results as AnalysisResult[];
   }
@@ -120,7 +120,7 @@ export class DatabaseService {
       WHERE symbol = ${symbol.toUpperCase()}
         AND date >= ${startDate}
         AND date <= ${endDate}
-      ORDER BY enhanced DESC, created_at DESC
+      ORDER BY schema_type DESC, created_at DESC
     `;
     return results as AnalysisResult[];
   }
@@ -165,16 +165,15 @@ export class DatabaseService {
   }
 
   /**
-   * Update analysis result enhancement
+   * Update analysis result schema type
    */
-  static async updateAnalysisEnhancement(
+  static async updateAnalysisSchema(
     id: string, 
-    enhanced: boolean, 
-    schema_type: 'R' | 'V' | null = null
+    schema_type: 'R' | 'V' | 'UNCLASSIFIED'
   ): Promise<void> {
     await sql`
       UPDATE analysis_results 
-      SET enhanced = ${enhanced}, schema_type = ${schema_type}
+      SET schema_type = ${schema_type}
       WHERE id = ${id}
     `;
   }
@@ -186,7 +185,9 @@ export class DatabaseService {
     totalSegments: number;
     upTrends: number;
     downTrends: number;
-    enhancedSegments: number;
+    rSchemas: number;
+    vSchemas: number;
+    unclassifiedSchemas: number;
     symbols: string[];
   }> {
     const stats = await sql`
@@ -194,7 +195,9 @@ export class DatabaseService {
         COUNT(*) as total_segments,
         COUNT(CASE WHEN trend_direction = 'UP' THEN 1 END) as up_trends,
         COUNT(CASE WHEN trend_direction = 'DOWN' THEN 1 END) as down_trends,
-        COUNT(CASE WHEN enhanced = true THEN 1 END) as enhanced_segments,
+        COUNT(CASE WHEN schema_type = 'R' THEN 1 END) as r_schemas,
+        COUNT(CASE WHEN schema_type = 'V' THEN 1 END) as v_schemas,
+        COUNT(CASE WHEN schema_type = 'UNCLASSIFIED' THEN 1 END) as unclassified_schemas,
         ARRAY_AGG(DISTINCT symbol) as symbols
       FROM analysis_results
     `;
@@ -203,7 +206,9 @@ export class DatabaseService {
       totalSegments: Number(stats[0].total_segments),
       upTrends: Number(stats[0].up_trends),
       downTrends: Number(stats[0].down_trends),
-      enhancedSegments: Number(stats[0].enhanced_segments),
+      rSchemas: Number(stats[0].r_schemas),
+      vSchemas: Number(stats[0].v_schemas),
+      unclassifiedSchemas: Number(stats[0].unclassified_schemas),
       symbols: stats[0].symbols || []
     };
   }

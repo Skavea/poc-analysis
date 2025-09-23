@@ -25,9 +25,9 @@ const ClientOnlyRadioGroup = dynamic(() => Promise.resolve(({ schemaType, setSch
         value="R"
         checked={schemaType === 'R'}
         onChange={(e) => setSchemaType(e.target.value as 'R')}
-        className="text-blue-600"
+        className="text-red-600"
       />
-      <span className="text-sm">R Schema</span>
+      <span className="text-sm font-medium text-red-800">R Schema</span>
     </label>
     <label className="flex items-center space-x-2">
       <input
@@ -36,9 +36,20 @@ const ClientOnlyRadioGroup = dynamic(() => Promise.resolve(({ schemaType, setSch
         value="V"
         checked={schemaType === 'V'}
         onChange={(e) => setSchemaType(e.target.value as 'V')}
-        className="text-blue-600"
+        className="text-purple-600"
       />
-      <span className="text-sm">V Schema</span>
+      <span className="text-sm font-medium text-purple-800">V Schema</span>
+    </label>
+    <label className="flex items-center space-x-2">
+      <input
+        type="radio"
+        name="schemaType"
+        value="UNCLASSIFIED"
+        checked={schemaType === 'UNCLASSIFIED'}
+        onChange={(e) => setSchemaType(e.target.value as 'UNCLASSIFIED')}
+        className="text-gray-600"
+      />
+      <span className="text-sm text-gray-600">Unclassified</span>
     </label>
   </div>
 )), { ssr: false });
@@ -68,7 +79,7 @@ export default function SegmentPage({ params }: SegmentPageProps) {
   const [segmentData, setSegmentData] = useState<SegmentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [schemaType, setSchemaType] = useState<'R' | 'V' | null>(null);
+  const [schemaType, setSchemaType] = useState<'R' | 'V' | 'UNCLASSIFIED'>('UNCLASSIFIED');
   const router = useRouter();
 
   useEffect(() => {
@@ -90,41 +101,39 @@ export default function SegmentPage({ params }: SegmentPageProps) {
     }
   };
 
-  const saveEnhancement = async () => {
+  const saveSchema = async () => {
     if (!segmentData) return;
     
     setSaving(true);
     try {
-      await DatabaseService.updateAnalysisEnhancement(
+      await DatabaseService.updateAnalysisSchema(
         resolvedParams.id,
-        true,
         schemaType
       );
       
       // Reload data to show updated state
       await loadSegmentData();
     } catch (error) {
-      console.error('Error saving enhancement:', error);
+      console.error('Error saving schema type:', error);
     } finally {
       setSaving(false);
     }
   };
 
-  const resetEnhancement = async () => {
+  const resetSchema = async () => {
     if (!segmentData) return;
     
     setSaving(true);
     try {
-      await DatabaseService.updateAnalysisEnhancement(
+      await DatabaseService.updateAnalysisSchema(
         resolvedParams.id,
-        false,
-        null
+        'UNCLASSIFIED'
       );
       
-      setSchemaType(null);
+      setSchemaType('UNCLASSIFIED');
       await loadSegmentData();
     } catch (error) {
-      console.error('Error resetting enhancement:', error);
+      console.error('Error resetting schema type:', error);
     } finally {
       setSaving(false);
     }
@@ -317,25 +326,24 @@ export default function SegmentPage({ params }: SegmentPageProps) {
               <div className="space-y-4">
                 <div>
                   <div className="text-sm text-gray-500 mb-2">Status</div>
-                  {analysis.enhanced ? (
-                    <div className="flex items-center space-x-2">
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-                        Enhanced
-                      </span>
-                      {analysis.schema_type && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-                          {analysis.schema_type}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-800 text-sm rounded-full">
-                      Not Enhanced
+                  {analysis.schema_type === 'R' && (
+                    <span className="px-2 py-1 bg-red-100 text-red-800 text-sm rounded-full font-medium">
+                      R Schema
+                    </span>
+                  )}
+                  {analysis.schema_type === 'V' && (
+                    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-sm rounded-full font-medium">
+                      V Schema
+                    </span>
+                  )}
+                  {analysis.schema_type === 'UNCLASSIFIED' && (
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">
+                      Unclassified
                     </span>
                   )}
                 </div>
 
-                {!analysis.enhanced && (
+                {analysis.schema_type === 'UNCLASSIFIED' && (
                   <div>
                     <div className="text-sm text-gray-500 mb-2">Schema Type</div>
                     <ClientOnlyRadioGroup
@@ -346,23 +354,23 @@ export default function SegmentPage({ params }: SegmentPageProps) {
                 )}
 
                 <div className="pt-4 border-t">
-                  {analysis.enhanced ? (
+                  {analysis.schema_type !== 'UNCLASSIFIED' ? (
                     <button
-                      onClick={resetEnhancement}
+                      onClick={resetSchema}
                       disabled={saving}
                       className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
                     >
                       <RotateCcw className="h-4 w-4" />
-                      <span>{saving ? 'Resetting...' : 'Reset Enhancement'}</span>
+                      <span>{saving ? 'Resetting...' : 'Reset to Unclassified'}</span>
                     </button>
                   ) : (
                     <button
-                      onClick={saveEnhancement}
-                      disabled={saving || !schemaType}
+                      onClick={saveSchema}
+                      disabled={saving}
                       className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                     >
                       <Save className="h-4 w-4" />
-                      <span>{saving ? 'Saving...' : 'Save Enhancement'}</span>
+                      <span>{saving ? 'Saving...' : 'Save Schema Type'}</span>
                     </button>
                   )}
                 </div>
