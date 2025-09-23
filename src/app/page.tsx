@@ -8,8 +8,23 @@
 
 import { DatabaseService } from '@/lib/db';
 import { StockData } from '@/lib/schema';
-import { BarChart3, Calendar, Database } from 'lucide-react';
+import { 
+  Box, 
+  VStack, 
+  HStack, 
+  Text, 
+  Card,
+  Grid,
+  GridItem,
+  Badge,
+  Button,
+  Heading,
+  Flex,
+  Spacer,
+} from "@chakra-ui/react";
+import { BarChart3, Calendar, Database, TrendingUp, Plus, Eye } from 'lucide-react';
 import Link from 'next/link';
+import Navigation from '@/components/layout/Navigation';
 import AddStockForm from '@/components/AddStockForm';
 
 // Server component for stock list
@@ -17,91 +32,106 @@ async function StockListServer() {
   const stocks = await DatabaseService.getAllStockData();
 
   return (
-    <div className="space-y-6">
+    <VStack gap={6} align="stretch">
       {stocks.length === 0 ? (
-        <div className="text-center py-12">
-          <Database className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No stocks found</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Get started by adding a new stock dataset.
-          </p>
-        </div>
+        <Card.Root>
+          <Card.Body textAlign="center" py={12}>
+            <Box mb={4}>
+              <Database size={48} color="gray" />
+            </Box>
+            <Heading size="md" color="fg.default" mb={2}>
+              No stocks found
+            </Heading>
+            <Text color="fg.muted">
+              Get started by adding a new stock dataset.
+            </Text>
+          </Card.Body>
+        </Card.Root>
       ) : (
-        stocks.map((stock) => (
-          <div
-            key={stock.id}
-            className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow duration-200"
-          >
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <BarChart3 className="h-6 w-6 text-blue-600" />
-                      </div>
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xl font-semibold text-gray-900">
+            <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)", xl: "repeat(4, 1fr)" }} gap={6}>
+              {stocks.map((stock, index) => (
+                <GridItem key={stock.id} className="stagger-item">
+                  <Card.Root
+                    className="hover-lift"
+                    cursor="pointer"
+                  >
+                <Card.Header pb={3}>
+                  <Flex align="center" justify="space-between">
+                    <HStack gap={3}>
+                      <Box
+                        p={2}
+                        bg="brand.50"
+                        rounded="lg"
+                        color="brand.600"
+                      >
+                        <BarChart3 size={24} />
+                      </Box>
+                      <VStack align="start" gap={0}>
+                        <Text fontSize="xl" fontWeight="bold" color="fg.default">
                           {stock.symbol}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {formatDate(stock.createdAt.toISOString())}
-                      </div>
-                    </div>
+                        </Text>
+                        <Text fontSize="sm" color="fg.muted">
+                          {formatDate(stock.createdAt.toISOString())}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                    <Badge colorPalette="blue" variant="subtle">
+                      Active
+                    </Badge>
+                  </Flex>
+                </Card.Header>
+                
+                <Card.Body pt={0}>
+                  <VStack gap={4} align="stretch">
+                    {/* Stats - Single Line */}
+                    <HStack gap={4} justify="space-between" fontSize="sm">
+                      <HStack gap={2}>
+                        <Calendar size={14} color="var(--chakra-colors-gray-500)" />
+                        <Text color="fg.muted">{getDateRange(stock.data)}</Text>
+                      </HStack>
+                      <HStack gap={2}>
+                        <Database size={14} color="var(--chakra-colors-gray-500)" />
+                        <Text color="fg.muted">{stock.totalPoints.toLocaleString()} points</Text>
+                      </HStack>
+                    </HStack>
                     
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">
-                          Date Range: {getDateRange(stock.data)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <Database className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">
-                          Data Points: {stock.totalPoints.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
+                    <Box borderTop="1px" borderColor="border.default" />
                     
-                    <div className="mt-4 pt-4 border-t">
-                      <div className="flex items-center justify-between">
-                        <div className="flex space-x-3">
-                          <Link
-                            href={`/analysis/${stock.symbol}`}
-                            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                          >
-                            <BarChart3 className="h-4 w-4 mr-2" />
-                            View Analysis
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))
+                    {/* Actions */}
+                    <Button
+                      asChild
+                      colorPalette="blue"
+                      size="md"
+                      w="full"
+                    >
+                      <Link href={`/analysis/${stock.symbol}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BarChart3 size={18} style={{ marginRight: '8px' }} />
+                        View Analysis
+                      </Link>
+                    </Button>
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
+            </GridItem>
+          ))}
+        </Grid>
       )}
-    </div>
+    </VStack>
   );
 }
 
 
 // Utility functions
 function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  const date = new Date(dateString);
+  // Use UTC to ensure consistent formatting between server and client
+  return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'UTC'
   });
 }
 
@@ -124,29 +154,22 @@ function getDateRange(data: any) {
 // Main page component
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Stock Analysis System</h1>
-              <p className="mt-2 text-gray-600">Manage stock datasets and analysis</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Database className="h-8 w-8 text-blue-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <Navigation
+      pageTitle="Stock Analysis Dashboard"
+      pageSubtitle="Manage your stock datasets and analyze market trends with professional tools"
+    >
+      <VStack gap={8} align="stretch">
         {/* Add New Stock Form */}
         <AddStockForm />
 
         {/* Stocks List */}
-        <StockListServer />
-      </div>
-    </div>
+        <Box>
+          <Heading size="lg" color="fg.default" mb={6}>
+            Available Stocks
+          </Heading>
+          <StockListServer />
+        </Box>
+      </VStack>
+    </Navigation>
   );
 }

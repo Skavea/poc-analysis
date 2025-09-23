@@ -12,10 +12,28 @@
 import { use } from 'react';
 import { DatabaseService } from '@/lib/db';
 import { AnalysisResult } from '@/lib/schema';
-import { TrendingUp, TrendingDown, Clock, BarChart3, Play, Filter } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, BarChart3, Play, Filter, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import RunAnalysisButton from '@/components/RunAnalysisButton';
+import AnalysisStatusAction from '@/components/AnalysisStatusAction';
+import AnalysisStatusScript from '@/components/AnalysisStatusScript';
+import ClientAnalysisStatus from '@/components/ClientAnalysisStatus';
 import AnalysisFilter from '@/components/AnalysisFilter';
+import {
+  Box,
+  VStack,
+  HStack,
+  Text,
+  Card,
+  Grid,
+  GridItem,
+  Badge,
+  Button,
+  Heading,
+  Flex,
+  Spacer,
+} from "@chakra-ui/react";
+import Navigation from '@/components/layout/Navigation';
 
 interface AnalysisPageProps {
   params: Promise<{ symbol: string }>;
@@ -25,10 +43,12 @@ interface AnalysisPageProps {
 // Server component for analysis results with stats
 async function AnalysisStatsServer({ 
   symbol, 
-  searchParams 
+  searchParams,
+  setHasExistingAnalysis 
 }: { 
   symbol: string;
   searchParams: { filter?: string };
+  setHasExistingAnalysis?: (value: boolean) => void;
 }) {
   const results = await DatabaseService.getAnalysisResults(symbol);
   
@@ -36,6 +56,11 @@ async function AnalysisStatsServer({
   const vCount = results.filter(r => r.schemaType === 'V').length;
   const unclassifiedCount = results.filter(r => r.schemaType === 'UNCLASSIFIED').length;
   const hasExistingAnalysis = results.length > 0;
+  
+  // If setHasExistingAnalysis is provided, call it with the current status
+  if (setHasExistingAnalysis) {
+    setHasExistingAnalysis(hasExistingAnalysis);
+  }
 
   // Filter results based on search params
   const filter = searchParams.filter || 'all';
@@ -44,150 +69,147 @@ async function AnalysisStatsServer({
     : results.filter(result => result.schemaType === filter);
 
   return (
-    <div className="space-y-6">
-      {/* Analysis Status */}
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {hasExistingAnalysis ? 'Analysis Status' : 'Create New Analysis'}
-            </h2>
-            <p className="text-sm text-gray-600">
-              {hasExistingAnalysis 
-                ? `Analysis already exists for ${symbol}. View existing segments below.`
-                : `Generate sub-datasets and trend analysis for ${symbol}`
-              }
-            </p>
-          </div>
-          {!hasExistingAnalysis && (
-            <RunAnalysisButton symbol={symbol} />
-          )}
-          {hasExistingAnalysis && (
-            <div className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-800 rounded-lg">
-              <BarChart3 className="h-4 w-4" />
-              <span>Analysis Complete</span>
-            </div>
-          )}
-        </div>
-      </div>
+    <VStack gap={8} align="stretch">
+      {/* Hidden script to update client components */}
+      <AnalysisStatusScript hasExistingAnalysis={hasExistingAnalysis} />
+      
+
 
       {/* Stats and Filters */}
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Analysis Results
-          </h2>
-          <AnalysisFilter 
-            totalCount={results.length}
-            rCount={rCount}
-            vCount={vCount}
-            unclassifiedCount={unclassifiedCount}
-          />
-        </div>
+      <Card.Root>
+        <Card.Header pb={4}>
+          <Flex align="center" justify="space-between">
+            <Heading size="lg" color="fg.default">
+              Analysis Results
+            </Heading>
+            <AnalysisFilter 
+              totalCount={results.length}
+              rCount={rCount}
+              vCount={vCount}
+              unclassifiedCount={unclassifiedCount}
+            />
+          </Flex>
+        </Card.Header>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="text-center p-3 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">
-              {results.length}
-            </div>
-            <div className="text-sm text-blue-600">Total Segments</div>
-          </div>
-          <div className="text-center p-3 bg-red-50 rounded-lg">
-            <div className="text-2xl font-bold text-red-600">
-              {rCount}
-            </div>
-            <div className="text-sm text-red-600">R Schema</div>
-          </div>
-          <div className="text-center p-3 bg-purple-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">
-              {vCount}
-            </div>
-            <div className="text-sm text-purple-600">V Schema</div>
-          </div>
-          <div className="text-center p-3 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-gray-600">
-              {unclassifiedCount}
-            </div>
-            <div className="text-sm text-gray-600">Unclassified</div>
-          </div>
-        </div>
-      </div>
+        <Card.Body pt={0}>
+          <HStack gap={6} justify="space-between" align="center">
+            <HStack gap={6}>
+              <HStack gap={2}>
+                <Text fontSize="sm" color="fg.muted">Total:</Text>
+                <Text fontSize="lg" fontWeight="bold" color="blue.600">{results.length}</Text>
+              </HStack>
+              <HStack gap={2}>
+                <Text fontSize="sm" color="fg.muted">R:</Text>
+                <Text fontSize="lg" fontWeight="bold" color="red.600">{rCount}</Text>
+              </HStack>
+              <HStack gap={2}>
+                <Text fontSize="sm" color="fg.muted">V:</Text>
+                <Text fontSize="lg" fontWeight="bold" color="purple.600">{vCount}</Text>
+              </HStack>
+              <HStack gap={2}>
+                <Text fontSize="sm" color="fg.muted">Unclassified:</Text>
+                <Text fontSize="lg" fontWeight="bold" color="gray.600">{unclassifiedCount}</Text>
+              </HStack>
+            </HStack>
+            <AnalysisFilter 
+              totalCount={results.length}
+              rCount={rCount}
+              vCount={vCount}
+              unclassifiedCount={unclassifiedCount}
+            />
+          </HStack>
+        </Card.Body>
+      </Card.Root>
 
       {/* Results List */}
       {filteredResults.length === 0 ? (
-        <div className="text-center py-12">
-          <BarChart3 className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">
-            {results.length === 0 ? 'No analysis results found' : 'No segments match the current filter'}
-          </h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {results.length === 0 ? 'Run analysis to generate sub-datasets.' : 'Try changing the filter to see more results.'}
-          </p>
-        </div>
+        <Card.Root>
+          <Card.Body textAlign="center" py={12}>
+            <Box mb={4}>
+              <BarChart3 size={48} color="var(--chakra-colors-gray-400)" />
+            </Box>
+            <Heading size="md" color="fg.default" mb={2}>
+              {results.length === 0 ? 'No analysis results found' : 'No segments match the current filter'}
+            </Heading>
+            <Text color="fg.muted">
+              {results.length === 0 ? 'Run analysis to generate sub-datasets.' : 'Try changing the filter to see more results.'}
+            </Text>
+          </Card.Body>
+        </Card.Root>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)", xl: "repeat(4, 1fr)" }} gap={6}>
           {filteredResults.map((result) => (
-            <Link
-              key={result.id}
-              href={`/segment/${encodeURIComponent(result.id)}`}
-              className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  {result.trendDirection === 'UP' ? (
-                    <TrendingUp className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <TrendingDown className="h-5 w-5 text-red-600" />
-                  )}
-                  <span className="text-sm font-medium text-gray-900">
-                    {result.trendDirection}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {result.schemaType === 'R' && (
-                    <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
-                      R
-                    </span>
-                  )}
-                  {result.schemaType === 'V' && (
-                    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
-                      V
-                    </span>
-                  )}
-                  {result.schemaType === 'UNCLASSIFIED' && (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                      Unclassified
-                    </span>
-                  )}
-                </div>
-              </div>
+            <GridItem key={result.id}>
+              <Card.Root
+                _hover={{
+                  shadow: "lg",
+                  transform: "translateY(-2px)",
+                  transition: "all 0.2s"
+                }}
+                transition="all 0.2s"
+                cursor="pointer"
+                asChild
+              >
+                <Link href={`/segment/${encodeURIComponent(result.id)}`}>
+                  <Card.Header pb={3}>
+                    <Flex align="center" justify="space-between">
+                      <HStack gap={2}>
+                        {result.trendDirection === 'UP' ? (
+                          <TrendingUp size={20} color="var(--chakra-colors-green-600)" />
+                        ) : (
+                          <TrendingDown size={20} color="var(--chakra-colors-red-600)" />
+                        )}
+                        <Text fontSize="sm" fontWeight="semibold" color="fg.default">
+                          {result.trendDirection}
+                        </Text>
+                      </HStack>
+                      <Badge
+                        colorPalette={
+                          result.schemaType === 'R' ? 'red' :
+                          result.schemaType === 'V' ? 'purple' : 'gray'
+                        }
+                        variant="subtle"
+                        size="sm"
+                      >
+                        {result.schemaType === 'UNCLASSIFIED' ? 'Unclassified' : result.schemaType}
+                      </Badge>
+                    </Flex>
+                  </Card.Header>
 
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-600">
-                    {formatTime(result.segmentStart.toISOString())} - {formatTime(result.segmentEnd.toISOString())}
-                  </span>
-                </div>
-                
-                <div className="text-sm text-gray-600">
-                  <div>Date: {formatDate(result.date)}</div>
-                  <div>Points: {result.pointCount}</div>
-                  <div>x0: ${Number(result.x0).toFixed(2)}</div>
-                  <div>Avg: ${Number(result.averagePrice).toFixed(2)}</div>
-                </div>
-              </div>
+                  <Card.Body pt={0}>
+                    <VStack gap={4} align="stretch">
+                      <HStack gap={2}>
+                        <Clock size={16} color="var(--chakra-colors-gray-500)" />
+                        <Text fontSize="sm" color="fg.muted">
+                          {formatTime(result.segmentStart.toISOString())} - {formatTime(result.segmentEnd.toISOString())}
+                        </Text>
+                      </HStack>
+                      
+                      <HStack gap={4} justify="space-between" fontSize="sm">
+                        <Text color="fg.muted">{result.pointCount} pts • {formatDate(result.date)}</Text>
+                        <HStack gap={4}>
+                          <Text color="fg.default" fontWeight="medium">x0: ${Number(result.x0).toFixed(2)}</Text>
+                          <Text color="fg.muted">Avg: ${Number(result.averagePrice).toFixed(2)}</Text>
+                        </HStack>
+                      </HStack>
 
-              <div className="mt-4 pt-4 border-t">
-                <div className="text-sm text-blue-600 font-medium">
-                  Click to view details →
-                </div>
-              </div>
-            </Link>
+                      <Box borderTop="1px" borderColor="border.default" />
+
+                      <HStack gap={2} justify="center">
+                        <Text fontSize="sm" color="blue.600" fontWeight="medium">
+                          Click to view details
+                        </Text>
+                        <ArrowRight size={16} color="var(--chakra-colors-blue-600)" />
+                      </HStack>
+                    </VStack>
+                  </Card.Body>
+                </Link>
+              </Card.Root>
+            </GridItem>
           ))}
-        </div>
+        </Grid>
       )}
-    </div>
+    </VStack>
   );
 }
 
@@ -224,9 +246,9 @@ function getSchemaTypeColor(schemaType: string) {
 
 function getTrendIcon(trend: string) {
   return trend === 'UP' ? (
-    <TrendingUp className="h-4 w-4 text-green-500" />
+    <TrendingUp size={16} color="green.500" />
   ) : (
-    <TrendingDown className="h-4 w-4 text-red-500" />
+    <TrendingDown size={16} color="red.500" />
   );
 }
 
@@ -237,29 +259,20 @@ export default function AnalysisPage({ params, searchParams }: AnalysisPageProps
   const symbol = resolvedParams.symbol;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Analysis: {symbol}
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Sub-datasets and trend analysis
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AnalysisStatsServer symbol={symbol} searchParams={resolvedSearchParams} />
-      </div>
-    </div>
+    <Navigation 
+      breadcrumbs={[
+        { label: `Analysis: ${symbol}` }
+      ]}
+      pageTitle={`Analysis: ${symbol}`}
+      pageSubtitle="Sub-datasets and trend analysis"
+      pageActions={
+        <ClientAnalysisStatus symbol={symbol} />
+      }
+    >
+      <AnalysisStatsServer 
+        symbol={symbol} 
+        searchParams={resolvedSearchParams}
+      />
+    </Navigation>
   );
 }

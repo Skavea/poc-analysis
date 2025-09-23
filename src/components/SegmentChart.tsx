@@ -9,6 +9,7 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Dot } from 'recharts';
 import { BarChart3 } from 'lucide-react';
+import { Box, VStack, HStack, Text, Heading } from '@chakra-ui/react';
 
 interface SegmentChartProps {
   pointsData: Array<{
@@ -30,12 +31,12 @@ interface SegmentChartProps {
 export default function SegmentChart({ pointsData, analysis }: SegmentChartProps) {
   if (!pointsData || pointsData.length === 0) {
     return (
-      <div className="h-96 flex items-center justify-center">
-        <div className="text-center">
-          <BarChart3 className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Chart not available</h3>
-        </div>
-      </div>
+      <Box height="24rem" display="flex" alignItems="center" justifyContent="center">
+        <VStack gap={2} textAlign="center">
+          <BarChart3 size={48} color="var(--chakra-colors-gray-400)" />
+          <Heading size="sm" color="fg.default">Chart not available</Heading>
+        </VStack>
+      </Box>
     );
   }
 
@@ -62,7 +63,7 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
   const x0Price = Number(analysis.x0);
 
   return (
-    <div className="h-96">
+    <Box height="24rem">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={pointsData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -113,28 +114,28 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
       </ResponsiveContainer>
       
       {/* Legend */}
-      <div className="mt-4 flex flex-wrap gap-4 text-sm">
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-          <span>Price</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-          <span>x0 (Last Point)</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-1 bg-purple-500"></div>
-          <span>Average</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-1 bg-red-500"></div>
-          <span>Min</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-1 bg-green-500"></div>
-          <span>Max</span>
-        </div>
-      </div>
-    </div>
+      <Box mt={4} display="flex" flexWrap="wrap" gap={4} fontSize="sm">
+        <HStack gap={2}>
+          <Box width="12px" height="12px" bg="blue.500" rounded="full" />
+          <Text>Price</Text>
+        </HStack>
+        <HStack gap={2}>
+          <Box width="12px" height="12px" bg="red.500" rounded="full" />
+          <Text>x0 (Last Point)</Text>
+        </HStack>
+        <HStack gap={2}>
+          <Box width="12px" height="4px" bg="purple.500" />
+          <Text>Average</Text>
+        </HStack>
+        <HStack gap={2}>
+          <Box width="12px" height="4px" bg="red.500" />
+          <Text>Min</Text>
+        </HStack>
+        <HStack gap={2}>
+          <Box width="12px" height="4px" bg="green.500" />
+          <Text>Max</Text>
+        </HStack>
+      </Box>
+    </Box>
   );
 }
