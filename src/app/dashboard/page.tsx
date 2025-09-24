@@ -22,11 +22,10 @@ import {
   Button,
   Flex,
   Badge,
-  Stat,
+  StatRoot as Stat,
   StatLabel,
-  StatNumber,
-  StatGroup,
-  Divider
+  StatValueText as StatNumber,
+  StatGroup
 } from '@chakra-ui/react';
 import { Progress } from '@/components/ui/Progress';
 import { BarChart3, TrendingUp, TrendingDown, Play, PieChart } from 'lucide-react';
@@ -87,7 +86,7 @@ export default function DashboardPage() {
       pageTitle="Classification Dashboard"
       pageSubtitle="Track classification progress across all stocks"
     >
-      <VStack spacing={8} align="stretch">
+      <VStack gap={8} align="stretch">
         {/* Overall Stats */}
         <Card.Root>
           <Card.Header pb={4}>
@@ -96,7 +95,7 @@ export default function DashboardPage() {
             </Heading>
           </Card.Header>
           <Card.Body pt={0}>
-            <VStack spacing={6} align="stretch">
+            <VStack gap={6} align="stretch">
               <StatGroup>
                 <Grid templateColumns={{ base: "1fr", md: "repeat(4, 1fr)" }} gap={4} width="100%">
                   <Stat>
@@ -153,7 +152,7 @@ export default function DashboardPage() {
             </Heading>
           </Card.Header>
           <Card.Body pt={0}>
-            <VStack spacing={4} align="stretch">
+            <VStack gap={4} align="stretch">
               {stockData.length === 0 ? (
                 <Box textAlign="center" py={8}>
                   <Box mb={4}>
@@ -176,7 +175,7 @@ export default function DashboardPage() {
                   return (
                     <Card.Root key={stock.symbol} variant="outline">
                       <Card.Body>
-                        <VStack spacing={4} align="stretch">
+                        <VStack gap={4} align="stretch">
                           <Flex justify="space-between" align="center">
                             <HStack>
                               <Heading size="md" color="fg.default">{stock.symbol}</Heading>
@@ -193,8 +192,11 @@ export default function DashboardPage() {
                               </Link>
                               
                               <Link href={`/slideshow/${stock.symbol}`} passHref>
-                                <Button size="sm" colorPalette="blue" leftIcon={<Play size={14} />}>
-                                  Start Slideshow
+                                <Button size="sm" colorPalette="blue">
+                                  <HStack gap={2}>
+                                    <Play size={14} />
+                                    <Text>Start Slideshow</Text>
+                                  </HStack>
                                 </Button>
                               </Link>
                             </HStack>
@@ -205,23 +207,23 @@ export default function DashboardPage() {
                           </Box>
                           
                           <HStack justify="space-between">
-                            <HStack spacing={4}>
-                              <HStack spacing={1}>
+                            <HStack gap={4}>
+                              <HStack gap={1}>
                                 <Text fontSize="sm" color="fg.muted">Total:</Text>
                                 <Text fontSize="sm" fontWeight="medium">{stockStats.total}</Text>
                               </HStack>
                               
-                              <HStack spacing={1}>
+                              <HStack gap={1}>
                                 <Text fontSize="sm" color="fg.muted">R:</Text>
                                 <Text fontSize="sm" fontWeight="medium" color="red.600">{stockStats.r}</Text>
                               </HStack>
                               
-                              <HStack spacing={1}>
+                              <HStack gap={1}>
                                 <Text fontSize="sm" color="fg.muted">V:</Text>
                                 <Text fontSize="sm" fontWeight="medium" color="purple.600">{stockStats.v}</Text>
                               </HStack>
                               
-                              <HStack spacing={1}>
+                              <HStack gap={1}>
                                 <Text fontSize="sm" color="fg.muted">Unclassified:</Text>
                                 <Text fontSize="sm" fontWeight="medium" color="gray.600">{stockStats.unclassified}</Text>
                               </HStack>

@@ -16,8 +16,11 @@ import {
   NewAnalysisResult,
   StockDataWithPoints,
   AnalysisResultWithChart,
+  ChartImage,
+  NewChartImage,
   schemaTypeSchema,
-  trendDirectionSchema
+  trendDirectionSchema,
+  chartFormatSchema
 } from './schema';
 
 // Environment validation function
@@ -272,6 +275,90 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching segment data:', error);
       throw new Error('Failed to fetch segment data');
+    }
+  }
+
+  /**
+   * Save a chart image to the database
+   */
+  static async saveChartImage(params: {
+    segmentId: string;
+    svgContent: string;
+    width: number;
+    height: number;
+    format?: 'svg' | 'png';
+  }): Promise<string> {
+    try {
+      const { segmentId, svgContent, width, height, format = 'svg' } = params;
+      
+      // Generate a unique ID for the chart image
+      const id = `chart_${segmentId}_${Date.now()}`;
+      
+      // Insert the chart image into the database
+      await this.db.insert(schema.chartImages).values({
+        id,
+        segmentId,
+        svgContent,
+        width,
+        height,
+        format,
+      });
+      
+      return id;
+    } catch (error) {
+      console.error('Error saving chart image:', error);
+      throw new Error('Failed to save chart image');
+    }
+  }
+  
+  /**
+   * Get a chart image by ID
+   */
+  static async getChartImageById(id: string): Promise<ChartImage | null> {
+    try {
+      const result = await this.db
+        .select()
+        .from(schema.chartImages)
+        .where(eq(schema.chartImages.id, id))
+        .limit(1);
+      
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error fetching chart image:', error);
+      throw new Error('Failed to fetch chart image');
+    }
+  }
+  
+  /**
+   * Get the latest chart image for a segment
+   */
+  static async getLatestChartForSegment(segmentId: string): Promise<ChartImage | null> {
+    try {
+      const result = await this.db
+        .select()
+        .from(schema.chartImages)
+        .where(eq(schema.chartImages.segmentId, segmentId))
+        .orderBy(desc(schema.chartImages.createdAt))
+        .limit(1);
+      
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error fetching chart for segment:', error);
+      throw new Error('Failed to fetch chart for segment');
+    }
+  }
+  
+  /**
+   * Delete a chart image by ID
+   */
+  static async deleteChartImage(id: string): Promise<void> {
+    try {
+      await this.db
+        .delete(schema.chartImages)
+        .where(eq(schema.chartImages.id, id));
+    } catch (error) {
+      console.error('Error deleting chart image:', error);
+      throw new Error('Failed to delete chart image');
     }
   }
 

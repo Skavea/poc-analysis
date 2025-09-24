@@ -302,8 +302,8 @@ export default function SegmentSlideshow({ segments, symbol }: SegmentSlideshowP
                     <Text fontSize="xs" color="fg.muted">
                       <strong>Keyboard shortcuts:</strong><br />
                       • Left/Right arrows: Navigate between segments<br />
-                      • "R" key: Classify as R Schema<br />
-                      • "V" key: Classify as V Schema
+                      • &quot;R&quot; key: Classify as R Schema<br />
+                      • &quot;V&quot; key: Classify as V Schema
                     </Text>
                   </Box>
                 </VStack>

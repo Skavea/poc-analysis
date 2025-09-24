@@ -5,7 +5,7 @@
  * DrizzleORM schema definitions for type-safe database operations
  */
 
-import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, unique } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, unique, text } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -82,6 +82,26 @@ export interface AnalysisResultWithChart extends AnalysisResult {
   }>;
 }
 
+// Chart Images Table
+export const chartImages = pgTable('chart_images', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  segmentId: varchar('segment_id', { length: 255 }).notNull().references(() => analysisResults.id),
+  svgContent: text('svg_content').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  format: varchar('format', { length: 10 }).notNull().default('svg'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Zod schemas for validation
+export const insertChartImageSchema = createInsertSchema(chartImages);
+export const selectChartImageSchema = createSelectSchema(chartImages);
+
+// Type exports for chart images
+export type ChartImage = typeof chartImages.$inferSelect;
+export type NewChartImage = typeof chartImages.$inferInsert;
+
 // Validation schemas
 export const schemaTypeSchema = z.enum(['R', 'V', 'UNCLASSIFIED']);
 export const trendDirectionSchema = z.enum(['UP', 'DOWN']);
+export const chartFormatSchema = z.enum(['svg', 'png']);

@@ -9,7 +9,7 @@
 
 import { Filter } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { HStack, Box, Field } from "@chakra-ui/react";
+import { HStack, Field } from "@chakra-ui/react";
 
 interface AnalysisFilterProps {
   totalCount: number;
@@ -38,30 +38,24 @@ export default function AnalysisFilter({ totalCount, rCount, vCount, unclassifie
       <Filter size={16} color="var(--chakra-colors-gray-500)" />
       <Field.Root>
         <Field.Label srOnly>Filter by schema type</Field.Label>
-        <Box
-          as="select"
+        <select
           value={currentFilter}
-          onChange={(e: any) => handleFilterChange(e.target.value)}
-          px={3}
-          py={2}
-          fontSize="sm"
-          border="1px"
-          borderColor="border.default"
-          borderRadius="md"
-          bg="bg.default"
-          color="fg.default"
-          minW="200px"
-          _focus={{
-            outline: "none",
-            borderColor: "brand.500",
-            boxShadow: "0 0 0 1px var(--chakra-colors-brand-500)"
+          onChange={(e) => handleFilterChange(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            fontSize: 'small',
+            border: '1px solid var(--chakra-colors-border-default)',
+            borderRadius: 'var(--chakra-radii-md)',
+            background: 'var(--chakra-colors-bg-default)',
+            color: 'var(--chakra-colors-fg-default)',
+            minWidth: '200px',
           }}
         >
           <option value="all">All ({totalCount})</option>
           <option value="R">R Schema ({rCount})</option>
           <option value="V">V Schema ({vCount})</option>
           <option value="UNCLASSIFIED">Unclassified ({unclassifiedCount})</option>
-        </Box>
+        </select>
       </Field.Root>
     </HStack>
   );

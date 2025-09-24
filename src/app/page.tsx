@@ -135,7 +135,8 @@ function formatDate(dateString: string) {
   });
 }
 
-function getDateRange(data: any) {
+function getDateRange(data: Record<string, unknown> | unknown) {
+  if (!data || typeof data !== 'object') return 'N/A';
   if (!data || typeof data !== 'object') return 'N/A';
   
   const timestamps = Object.keys(data).filter(key => 

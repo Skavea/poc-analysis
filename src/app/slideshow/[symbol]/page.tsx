@@ -45,8 +45,11 @@ export default function SlideshowPage({ params }: SlideshowPageProps) {
           <Heading size="md" mb={4}>No segments found for {symbol}</Heading>
           <Text mb={6}>Please run analysis first to generate segments.</Text>
           <Link href={`/analysis/${symbol}`} passHref>
-            <Button colorPalette="blue" leftIcon={<ArrowLeft size={16} />}>
-              Return to Analysis
+            <Button colorPalette="blue">
+              <HStack gap={2}>
+                <ArrowLeft size={16} />
+                <Text>Return to Analysis</Text>
+              </HStack>
             </Button>
           </Link>
         </Box>
@@ -70,8 +73,11 @@ export default function SlideshowPage({ params }: SlideshowPageProps) {
       pageSubtitle={`Review and classify segments (${classified}/${total} classified - ${progress}%)`}
       pageActions={
         <Link href={`/analysis/${symbol}`} passHref>
-          <Button variant="outline" leftIcon={<ArrowLeft size={16} />}>
-            Back to Analysis
+          <Button variant="outline">
+            <HStack gap={2}>
+              <ArrowLeft size={16} />
+              <Text>Back to Analysis</Text>
+            </HStack>
           </Button>
         </Link>
       }

@@ -10,7 +10,10 @@ import { neon } from '@neondatabase/serverless';
 import { v4 as uuidv4 } from 'uuid';
 
 // Database connection
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_yEFj57ApYTDl@ep-green-base-agls4wca-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const databaseUrl = process.env.DATABASE_URL 
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL environment variable is not set');
+}
 const sql = neon(databaseUrl);
 
 export class StockAnalysisService {
@@ -88,6 +91,13 @@ export class StockAnalysisService {
   /**
    * Extract segments from stock data
    */
+  /**
+   * Process and analyze stock data to extract meaningful segments
+   * 
+   * @param symbol Stock symbol (e.g., AAPL, MSFT)
+   * @param data Raw stock price data
+   * @returns Array of analyzed segments with filtering applied
+   */
   extractSegments(symbol: string, data: any): Array<{
     id: string;
     symbol: string;
@@ -112,7 +122,7 @@ export class StockAnalysisService {
     
     for (const [date, dayTimestamps] of Object.entries(tradingDays)) {
       // Extract 2-hour segments (120 minutes each)
-      const segmentsForDay = this.extractSegmentsForDay(symbol, date, dayTimestamps, data);
+      const segmentsForDay = this.processSegmentsForDay(symbol, date, dayTimestamps, data);
       segments.push(...segmentsForDay);
     }
 
@@ -139,7 +149,11 @@ export class StockAnalysisService {
   /**
    * Extract segments for a single trading day
    */
-  private extractSegmentsForDay(
+  /**
+   * Process segments for a single trading day
+   * Extracts 2-hour segments and processes each one
+   */
+  private processSegmentsForDay(
     symbol: string, 
     date: string, 
     timestamps: string[], 
@@ -158,7 +172,7 @@ export class StockAnalysisService {
       
       if (segmentTimestamps.length < 6) continue; // Skip if too few points
       
-      const segmentData = this.analyzeSegment(symbol, date, segmentTimestamps, data);
+      const segmentData = this.processSegment(symbol, date, segmentTimestamps, data);
       if (segmentData) {
         segments.push(segmentData);
       }
@@ -171,9 +185,15 @@ export class StockAnalysisService {
   }
 
   /**
-   * Analyze a single segment
+   * Process a single segment through analysis and filtering
+   * 
+   * The processing follows these steps:
+   * 1. Calculate initial metrics (min, max, average, trend)
+   * 2. Filter points to include only those in the same region as X0 (UP/DOWN)
+   * 3. Apply plateau and constant derivative filtering
+   * 4. Adjust point count to stay within 6-40 point range
    */
-  private analyzeSegment(
+  private processSegment(
     symbol: string, 
     date: string, 
     timestamps: string[], 
@@ -181,117 +201,98 @@ export class StockAnalysisService {
   ): any | null {
     if (timestamps.length < 6) return null;
 
-    // Get all prices for the segment
+    const originalTimestamps = [...timestamps];
+    const originalPointCount = timestamps.length;
+    
+    // Step 1: Calculate initial metrics
     const prices = timestamps.map(ts => parseFloat(data[ts]['4. close']));
     const x0 = prices[prices.length - 1]; // Last price (most recent)
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
     const averagePrice = (minPrice + maxPrice) / 2;
     const trendDirection = x0 > averagePrice ? 'UP' : 'DOWN';
-
-    // Determine which part of the chart x0 belongs to (above or below average)
-    // Then adjust the number of points based on the requirement (6-21 points)
-    let adjustedTimestamps = [...timestamps];
-    const originalPointCount = timestamps.length;
     
-    // Count points in the same region as x0 (above or below average)
-    const pointsInRegion = prices.filter(price => {
-      if (trendDirection === 'UP') {
-        return price > averagePrice; // Points above average for UP trend
-      } else {
-        return price < averagePrice; // Points below average for DOWN trend
+    console.log(`Processing segment for ${symbol} on ${date}, trend: ${trendDirection}, original points: ${timestamps.length}`);
+    
+    // Step 2: Filter points to keep only those in the same region as X0
+    const sameRegionIndices = [];
+    for (let i = 0; i < prices.length; i++) {
+      if ((trendDirection === 'UP' && prices[i] > averagePrice) || 
+          (trendDirection === 'DOWN' && prices[i] < averagePrice)) {
+        sameRegionIndices.push(i);
       }
-    }).length;
+    }
     
-    // Adjust the number of points
+    // Create filtered arrays based on region
+    let regionFilteredTimestamps = sameRegionIndices.map(idx => timestamps[idx]);
+    let regionFilteredPrices = sameRegionIndices.map(idx => prices[idx]);
+    
+    const pointsInRegion = regionFilteredTimestamps.length;
+    console.log(`Points in ${trendDirection} region: ${pointsInRegion}`);
+    
+    // Check if we have too few points after region filtering
     if (pointsInRegion < 6) {
-      // Too few points in the region - this is rare with 2-hour segments
-      // For now, we'll just keep all points and log the issue
       console.log(`WARNING: Only ${pointsInRegion} points in ${trendDirection} region for ${symbol}, which is below minimum of 6`);
-      // In a more advanced implementation, we could expand the time window
-    } else if (pointsInRegion > 21) {
-      // Too many points in the region - reduce the time window by 20%
-      console.log(`Too many points (${pointsInRegion}) in ${trendDirection} region for ${symbol}, reducing time window by 20%`);
+      // Keep original timestamps and apply only subsequent filtering
+      regionFilteredTimestamps = [...timestamps];
+      regionFilteredPrices = [...prices];
+    }
+    
+    // Step 3: Apply plateau and constant derivative filtering
+    const plateauFilteredIndices = this.removeRedundantPoints(regionFilteredTimestamps, regionFilteredPrices);
+    let adjustedTimestamps = plateauFilteredIndices.map(idx => regionFilteredTimestamps[idx]);
+    
+    console.log(`After plateau/derivative filtering: ${adjustedTimestamps.length} points`);
+    
+    // If we have too few points after all filtering, revert to region-filtered set
+    if (adjustedTimestamps.length < 6) {
+      console.log(`WARNING: Plateau filtering reduced points below minimum (${adjustedTimestamps.length}), reverting to region-filtered`); 
+      adjustedTimestamps = [...regionFilteredTimestamps];
+    }
+    
+    // Step 4: Adjust point count to stay within range (6-40)
+    // Check if we have too many points
+    if (adjustedTimestamps.length > 40) {
+      console.log(`Too many points (${adjustedTimestamps.length}) after filtering for ${symbol}, reducing time window by 20%`);
       
-      // Calculate how many timestamps to keep (80% of original)
-      const keepPercentage = 0.8; // Keep 80% of the points
-      const pointsToKeep = Math.floor(timestamps.length * keepPercentage);
+      // Keep 80% of points, removing from the beginning (oldest)
+      const keepPercentage = 0.8;
+      adjustedTimestamps = adjustedTimestamps.slice(
+        Math.floor(adjustedTimestamps.length * (1 - keepPercentage))
+      );
       
-      // Remove oldest points (from the beginning of the array)
-      // This effectively reduces the time window while keeping the most recent data
-      adjustedTimestamps = timestamps.slice(timestamps.length - pointsToKeep);
+      // Calculate metrics after reduction
+      const reducedPrices = adjustedTimestamps.map(ts => parseFloat(data[ts]['4. close']));
+      const reducedPointCount = adjustedTimestamps.length;
       
-      // Recalculate the points in region after time window reduction
-      const newPrices = adjustedTimestamps.map(ts => parseFloat(data[ts]['4. close']));
-      const newX0 = newPrices[newPrices.length - 1]; // Last price (most recent)
-      const newMinPrice = Math.min(...newPrices);
-      const newMaxPrice = Math.max(...newPrices);
-      const newAveragePrice = (newMinPrice + newMaxPrice) / 2;
-      const newTrendDirection = newX0 > newAveragePrice ? 'UP' : 'DOWN';
-      
-      // Count points in the same region after reduction
-      const newPointsInRegion = newPrices.filter(price => {
-        if (newTrendDirection === 'UP') {
-          return price > newAveragePrice;
-        } else {
-          return price < newAveragePrice;
-        }
-      }).length;
-      
-      console.log(`Reduced time window from ${timestamps.length} to ${adjustedTimestamps.length} points`);
-      console.log(`New points in ${newTrendDirection} region: ${newPointsInRegion}`);
+      console.log(`Reduced to ${reducedPointCount} points`);
       
       // If we still have too many points, recursively reduce again
-      if (newPointsInRegion > 21) {
-        console.log(`Still too many points (${newPointsInRegion}), reducing further...`);
+      if (reducedPointCount > 40) {
+        console.log(`Still too many points (${reducedPointCount}), reducing further...`);
         
         // Recursive reduction (up to 5 times to avoid infinite loops)
         let attempts = 1;
         let currentTimestamps = adjustedTimestamps;
-        let currentPointsInRegion = newPointsInRegion;
-        let currentTrendDirection = newTrendDirection;
         
-        while (currentPointsInRegion > 21 && attempts < 5) {
+        while (currentTimestamps.length > 40 && attempts < 5) {
           // Calculate how much more to reduce based on how far we are from target
-          // The more we exceed the target, the more aggressive the reduction
-          const reductionFactor = Math.min(0.5, 0.2 + (currentPointsInRegion - 21) / 100);
+          const reductionFactor = Math.min(0.5, 0.2 + (currentTimestamps.length - 40) / 100);
           
           const furtherReducedTimestamps = currentTimestamps.slice(
             Math.floor(currentTimestamps.length * reductionFactor) // Remove more points from the beginning
           );
           
           // Make sure we don't reduce too much
-          if (furtherReducedTimestamps.length < 21) {
+          if (furtherReducedTimestamps.length < 6) {
             console.log(`Cannot reduce further without going below minimum points (${furtherReducedTimestamps.length})`);
             break;
           }
           
-          // Recalculate again
-          const furtherPrices = furtherReducedTimestamps.map(ts => parseFloat(data[ts]['4. close']));
-          const furtherMinPrice = Math.min(...furtherPrices);
-          const furtherMaxPrice = Math.max(...furtherPrices);
-          const furtherAveragePrice = (furtherMinPrice + furtherMaxPrice) / 2;
-          const furtherX0 = furtherPrices[furtherPrices.length - 1];
-          const furtherTrendDirection = furtherX0 > furtherAveragePrice ? 'UP' : 'DOWN';
-          
-          currentPointsInRegion = furtherPrices.filter(price => {
-            if (furtherTrendDirection === 'UP') {
-              return price > furtherAveragePrice;
-            } else {
-              return price < furtherAveragePrice;
-            }
-          }).length;
-          
           currentTimestamps = furtherReducedTimestamps;
-          currentTrendDirection = furtherTrendDirection;
           attempts++;
           
-          console.log(`Attempt ${attempts}: Reduced to ${currentTimestamps.length} points, ${currentPointsInRegion} in ${currentTrendDirection} region (reduction factor: ${reductionFactor.toFixed(2)})`);
-          
-          // If trend direction changed, we need to recalculate points in region
-          if (currentTrendDirection !== newTrendDirection) {
-            console.log(`Trend direction changed from ${newTrendDirection} to ${currentTrendDirection}`);
-          }
+          console.log(`Attempt ${attempts}: Reduced to ${currentTimestamps.length} points (reduction factor: ${reductionFactor.toFixed(2)})`);
         }
         
         // Use the final reduced timestamps
@@ -299,7 +300,7 @@ export class StockAnalysisService {
       }
     }
 
-    // Recalculate all values based on the final adjusted timestamps
+    // Step 5: Recalculate all metrics based on the final adjusted timestamps
     const finalPrices = adjustedTimestamps.map(ts => parseFloat(data[ts]['4. close']));
     const finalX0 = finalPrices[finalPrices.length - 1]; // Last price (most recent)
     const finalMinPrice = Math.min(...finalPrices);
@@ -332,6 +333,8 @@ export class StockAnalysisService {
     // Format: SYMBOL_DATE_TIMESTAMP (using UUID to ensure uniqueness)
     const segmentId = `${symbol}_${date}_${uuidv4().substring(0, 8)}`;
 
+    console.log(`Final result: reduced from ${originalPointCount} to ${adjustedTimestamps.length} points`);
+    
     // Create a new object with the final values
     const result = {
       id: segmentId,
@@ -402,6 +405,51 @@ export class StockAnalysisService {
   /**
    * Process a stock symbol (fetch data and run analysis)
    */
+  /**
+   * Remove redundant points from price data:
+   * 1. For plateaus: Removes middle point of 3 consecutive identical prices
+   * 2. For constant derivatives: Removes middle point of 3 consecutive points with same rate of change
+   * 
+   * @param timestamps Array of timestamp strings
+   * @param prices Array of price values corresponding to timestamps
+   * @returns Array of indices to keep
+   */
+  private removeRedundantPoints(timestamps: string[], prices: number[]): number[] {
+    if (prices.length < 3) return Array.from({ length: prices.length }, (_, i) => i);
+    
+    // Keep track of which indices to keep (start with all)
+    const indicesToKeep = Array.from({ length: prices.length }, (_, i) => true);
+    
+    // Check for plateaus and constant derivatives
+    for (let i = 0; i < prices.length - 2; i++) {
+      // Check for plateau (3 identical prices)
+      if (prices[i] === prices[i+1] && prices[i+1] === prices[i+2]) {
+        // Mark the middle point to be removed
+        indicesToKeep[i+1] = false;
+        console.log(`Removing middle point of plateau at index ${i+1}, price ${prices[i]}`);
+        // Skip the next point as we've already processed it as part of this plateau
+        i++;
+        continue;
+      }
+      
+      // Check for constant derivative
+      const derivative1 = prices[i+1] - prices[i];
+      const derivative2 = prices[i+2] - prices[i+1];
+      
+      // If derivatives are very close (accounting for floating point precision)
+      if (Math.abs(derivative1 - derivative2) < 0.0001) {
+        // Mark the middle point to be removed
+        indicesToKeep[i+1] = false;
+        console.log(`Removing middle point of constant derivative at index ${i+1}, derivatives: ${derivative1.toFixed(4)}, ${derivative2.toFixed(4)}`);
+        // Skip the next point as we've already processed it as part of this segment
+        i++;
+      }
+    }
+    
+    // Create a new array with only the points we want to keep
+    return prices.map((_, index) => index).filter(index => indicesToKeep[index]);
+  }
+  
   async processStock(symbol: string): Promise<{
     success: boolean;
     message: string;

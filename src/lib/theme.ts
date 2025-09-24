@@ -13,6 +13,19 @@ export const system = createSystem(defaultConfig, {
     tokens: {
       // Color tokens
       colors: {
+        gray: {
+          50: { value: "#f9fafb" },
+          100: { value: "#f3f4f6" },
+          200: { value: "#e5e7eb" },
+          300: { value: "#d1d5db" },
+          400: { value: "#9ca3af" },
+          500: { value: "#6b7280" },
+          600: { value: "#4b5563" },
+          700: { value: "#374151" },
+          800: { value: "#1f2937" },
+          900: { value: "#111827" },
+          950: { value: "#030712" },
+        },
         primary: {
           50: { value: "#eff6ff" },
           100: { value: "#dbeafe" },
@@ -166,49 +179,49 @@ export const system = createSystem(defaultConfig, {
       colors: {
         // Background colors
         bg: {
-          canvas: { value: "{colors.gray.50}", _dark: "{colors.gray.950}" },
-          default: { value: "{colors.white}", _dark: "{colors.gray.900}" },
-          subtle: { value: "{colors.gray.100}", _dark: "{colors.gray.800}" },
-          emphasized: { value: "{colors.gray.200}", _dark: "{colors.gray.700}" },
+          canvas: { value: { base: "{colors.gray.50}", _dark: "{colors.gray.950}" } },
+          default: { value: { base: "{colors.white}", _dark: "{colors.gray.900}" } },
+          subtle: { value: { base: "{colors.gray.100}", _dark: "{colors.gray.800}" } },
+          emphasized: { value: { base: "{colors.gray.200}", _dark: "{colors.gray.700}" } },
         },
         // Text colors
         fg: {
-          default: { value: "{colors.gray.900}", _dark: "{colors.gray.50}" },
-          muted: { value: "{colors.gray.600}", _dark: "{colors.gray.400}" },
-          subtle: { value: "{colors.gray.500}", _dark: "{colors.gray.500}" },
-          inverted: { value: "{colors.white}", _dark: "{colors.gray.900}" },
+          default: { value: { base: "{colors.gray.900}", _dark: "{colors.gray.50}" } },
+          muted: { value: { base: "{colors.gray.600}", _dark: "{colors.gray.400}" } },
+          subtle: { value: { base: "{colors.gray.500}", _dark: "{colors.gray.500}" } },
+          inverted: { value: { base: "{colors.white}", _dark: "{colors.gray.900}" } },
         },
         // Border colors
         border: {
-          default: { value: "{colors.gray.200}", _dark: "{colors.gray.800}" },
-          emphasized: { value: "{colors.gray.300}", _dark: "{colors.gray.700}" },
-          subtle: { value: "{colors.gray.100}", _dark: "{colors.gray.900}" },
+          default: { value: { base: "{colors.gray.200}", _dark: "{colors.gray.800}" } },
+          emphasized: { value: { base: "{colors.gray.300}", _dark: "{colors.gray.700}" } },
+          subtle: { value: { base: "{colors.gray.100}", _dark: "{colors.gray.900}" } },
         },
         // Brand colors
         brand: {
-          default: { value: "{colors.primary.500}", _dark: "{colors.primary.400}" },
-          emphasized: { value: "{colors.primary.600}", _dark: "{colors.primary.300}" },
-          subtle: { value: "{colors.primary.50}", _dark: "{colors.primary.950}" },
-          fg: { value: "{colors.white}", _dark: "{colors.gray.900}" },
+          default: { value: { base: "{colors.primary.500}", _dark: "{colors.primary.400}" } },
+          emphasized: { value: { base: "{colors.primary.600}", _dark: "{colors.primary.300}" } },
+          subtle: { value: { base: "{colors.primary.50}", _dark: "{colors.primary.950}" } },
+          fg: { value: { base: "{colors.white}", _dark: "{colors.gray.900}" } },
         },
         // Status colors
         success: {
-          default: { value: "{colors.success.500}", _dark: "{colors.success.400}" },
-          emphasized: { value: "{colors.success.600}", _dark: "{colors.success.300}" },
-          subtle: { value: "{colors.success.50}", _dark: "{colors.success.950}" },
-          fg: { value: "{colors.white}", _dark: "{colors.gray.900}" },
+          default: { value: { base: "{colors.success.500}", _dark: "{colors.success.400}" } },
+          emphasized: { value: { base: "{colors.success.600}", _dark: "{colors.success.300}" } },
+          subtle: { value: { base: "{colors.success.50}", _dark: "{colors.success.950}" } },
+          fg: { value: { base: "{colors.white}", _dark: "{colors.gray.900}" } },
         },
         warning: {
-          default: { value: "{colors.warning.500}", _dark: "{colors.warning.400}" },
-          emphasized: { value: "{colors.warning.600}", _dark: "{colors.warning.300}" },
-          subtle: { value: "{colors.warning.50}", _dark: "{colors.warning.950}" },
-          fg: { value: "{colors.white}", _dark: "{colors.gray.900}" },
+          default: { value: { base: "{colors.warning.500}", _dark: "{colors.warning.400}" } },
+          emphasized: { value: { base: "{colors.warning.600}", _dark: "{colors.warning.300}" } },
+          subtle: { value: { base: "{colors.warning.50}", _dark: "{colors.warning.950}" } },
+          fg: { value: { base: "{colors.white}", _dark: "{colors.gray.900}" } },
         },
         error: {
-          default: { value: "{colors.error.500}", _dark: "{colors.error.400}" },
-          emphasized: { value: "{colors.error.600}", _dark: "{colors.error.300}" },
-          subtle: { value: "{colors.error.50}", _dark: "{colors.error.950}" },
-          fg: { value: "{colors.white}", _dark: "{colors.gray.900}" },
+          default: { value: { base: "{colors.error.500}", _dark: "{colors.error.400}" } },
+          emphasized: { value: { base: "{colors.error.600}", _dark: "{colors.error.300}" } },
+          subtle: { value: { base: "{colors.error.50}", _dark: "{colors.error.950}" } },
+          fg: { value: { base: "{colors.white}", _dark: "{colors.gray.900}" } },
         },
       },
     },

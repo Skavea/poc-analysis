@@ -7,9 +7,19 @@
 
 'use client';
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Dot } from 'recharts';
-import { BarChart3 } from 'lucide-react';
-import { Box, VStack, HStack, Text, Heading } from '@chakra-ui/react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Dot,
+} from "recharts";
+import { BarChart3, Download } from 'lucide-react';
+import { Box, VStack, HStack, Text, Heading, Button } from '@chakra-ui/react';
 
 interface SegmentChartProps {
   pointsData: Array<{
@@ -29,6 +39,45 @@ interface SegmentChartProps {
 }
 
 export default function SegmentChart({ pointsData, analysis }: SegmentChartProps) {
+  // Function to export chart as SVG
+  const exportChartAsSVG = () => {
+    try {
+      // Find the SVG element in the component
+      const svgElement = document.querySelector('.recharts-wrapper svg');
+      if (!svgElement) {
+        throw new Error('SVG element not found');
+      }
+      
+      // Clone the SVG to avoid modifying the original
+      const svgClone = svgElement.cloneNode(true) as SVGElement;
+      
+      // Set proper dimensions and namespaces
+      svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      svgClone.setAttribute('width', svgElement.clientWidth.toString());
+      svgClone.setAttribute('height', svgElement.clientHeight.toString());
+      
+      // Convert SVG to string
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+      
+      // Create a blob and download link
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `chart-${analysis.x0}-${new Date().toISOString()}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      alert('Chart exported successfully!');
+      
+    } catch (error) {
+      console.error('Error exporting SVG:', error);
+      alert('Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
   if (!pointsData || pointsData.length === 0) {
     return (
       <Box height="24rem" display="flex" alignItems="center" justifyContent="center">
@@ -61,6 +110,13 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
   const maxPrice = Number(analysis.maxPrice);
   const averagePrice = Number(analysis.averagePrice);
   const x0Price = Number(analysis.x0);
+  
+  // Calculate Y-axis domain with percentage-based padding (7%)
+  const priceRange = maxPrice - minPrice;
+  const paddingPercentage = 0.07; // 7% padding
+  const padding = priceRange * paddingPercentage;
+  const yAxisMin = minPrice - padding;
+  const yAxisMax = maxPrice + padding;
 
   return (
     <Box height="24rem">
@@ -75,7 +131,7 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
             height={60}
           />
           <YAxis 
-            domain={['dataMin - 1', 'dataMax + 1']}
+            domain={[yAxisMin, yAxisMax]}
             tickFormatter={(value) => `$${value.toFixed(2)}`}
           />
           <Tooltip 
@@ -104,7 +160,7 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
           />
           
           <Line 
-            type="monotone" 
+            type="linear" 
             dataKey="close" 
             stroke="#3b82f6" 
             strokeWidth={2}
@@ -114,7 +170,8 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
       </ResponsiveContainer>
       
       {/* Legend */}
-      <Box mt={4} display="flex" flexWrap="wrap" gap={4} fontSize="sm">
+      <HStack mt={4} justify="space-between" align="center">
+        <Box display="flex" flexWrap="wrap" gap={4} fontSize="sm">
         <HStack gap={2}>
           <Box width="12px" height="12px" bg="blue.500" rounded="full" />
           <Text>Price</Text>
@@ -135,7 +192,18 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
           <Box width="12px" height="4px" bg="green.500" />
           <Text>Max</Text>
         </HStack>
-      </Box>
+        </Box>
+        
+        <Button
+          size="sm"
+          colorPalette="blue"
+          variant="outline"
+          onClick={exportChartAsSVG}
+        >
+          <Download size={14} style={{ marginRight: '8px' }} />
+          Export SVG
+        </Button>
+      </HStack>
     </Box>
   );
 }
