@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if analysis already exists for this symbol
+    const { neon } = await import('@neondatabase/serverless');
+    const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_yEFj57ApYTDl@ep-green-base-agls4wca-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+    const sql = neon(databaseUrl);
+    
     const existingAnalysis = await sql`
       SELECT COUNT(*) as count FROM analysis_results 
       WHERE symbol = ${symbol.toUpperCase()}

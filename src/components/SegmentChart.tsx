@@ -88,19 +88,19 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
             y={averagePrice} 
             stroke="#8b5cf6" 
             strokeDasharray="5 5"
-            label={{ value: "Average", position: "topRight" }}
+            label={{ value: "Average", position: "top" }}
           />
           <ReferenceLine 
             y={minPrice} 
             stroke="#ef4444" 
             strokeDasharray="3 3"
-            label={{ value: "Min", position: "topRight" }}
+            label={{ value: "Min", position: "top" }}
           />
           <ReferenceLine 
             y={maxPrice} 
             stroke="#10b981" 
             strokeDasharray="3 3"
-            label={{ value: "Max", position: "topRight" }}
+            label={{ value: "Max", position: "top" }}
           />
           
           <Line 

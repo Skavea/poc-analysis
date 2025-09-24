@@ -44,6 +44,8 @@ CREATE TABLE analysis_results (
     enhanced BOOLEAN DEFAULT FALSE,
     schema_type VARCHAR(1) CHECK (schema_type IN ('R', 'V')),
     points_data JSONB, -- Sub-dataset points data
+    original_point_count INTEGER, -- Original number of points before adjustment
+    points_in_region INTEGER, -- Number of points in the same region as x0
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
     -- Constraints

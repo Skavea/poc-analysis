@@ -3,9 +3,17 @@
 import { useTheme } from 'next-themes';
 import { Button, HStack, Text } from '@chakra-ui/react';
 import { Sun, Moon, Monitor } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function ThemeToggle() {
+  // Add client-side only rendering to prevent hydration mismatch
+  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
+  
+  // Only show the UI after mounting on the client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cycleTheme = () => {
     if (theme === 'light') {
@@ -38,6 +46,24 @@ export default function ThemeToggle() {
         return 'System';
     }
   };
+
+  // Don't render anything until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        _hover={{ bg: 'bg.subtle' }}
+      >
+        <HStack gap={2}>
+          <div style={{ width: '16px', height: '16px' }} />
+          <Text fontSize="sm" display={{ base: 'none', md: 'block' }}>
+            Theme
+          </Text>
+        </HStack>
+      </Button>
+    );
+  }
 
   return (
     <Button 

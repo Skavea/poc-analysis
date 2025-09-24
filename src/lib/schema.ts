@@ -35,6 +35,8 @@ export const analysisResults = pgTable('analysis_results', {
   trendDirection: varchar('trend_direction', { length: 10 }).notNull(),
   schemaType: varchar('schema_type', { length: 20 }).default('UNCLASSIFIED').notNull(),
   pointsData: jsonb('points_data'),
+  originalPointCount: integer('original_point_count'),
+  pointsInRegion: integer('points_in_region'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   trendDirectionCheck: check('trend_direction_check', sql`${table.trendDirection} IN ('UP', 'DOWN')`),

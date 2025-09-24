@@ -221,13 +221,38 @@ export class DatabaseService {
 
   static async getSegmentData(segmentId: string): Promise<AnalysisResultWithChart | null> {
     try {
+      // First, try to decode the URL segment ID
       const decodedSegmentId = decodeURIComponent(segmentId);
       
-      const [result] = await this.db
+      // Try to find the segment by exact ID match first
+      let result = await this.db
         .select()
         .from(schema.analysisResults)
         .where(eq(schema.analysisResults.id, decodedSegmentId))
-        .limit(1);
+        .limit(1)
+        .then(results => results[0] || null);
+      
+      // If not found, try to find by partial match (the URL format might differ from DB format)
+      if (!result) {
+        console.log(`Segment not found by exact ID: ${decodedSegmentId}, trying partial match...`);
+        
+        // Extract parts from the segment ID (assuming format like SYMBOL_DATE_START_END)
+        const parts = decodedSegmentId.split('_');
+        if (parts.length >= 2) {
+          const symbol = parts[0];
+          // Get all segments for this symbol and find the best match
+          const segments = await this.db
+            .select()
+            .from(schema.analysisResults)
+            .where(eq(schema.analysisResults.symbol, symbol));
+          
+          // Find the first segment that contains parts of the original ID
+          const foundSegment = segments.find(seg => seg.id.includes(parts[1]));
+          if (foundSegment) {
+            result = foundSegment;
+          }
+        }
+      }
       
       if (!result) {
         return null;
@@ -243,7 +268,7 @@ export class DatabaseService {
           close: number;
           volume: number;
         }>) || []
-      };
+      } as AnalysisResultWithChart;
     } catch (error) {
       console.error('Error fetching segment data:', error);
       throw new Error('Failed to fetch segment data');

@@ -13,6 +13,7 @@ import { DatabaseService } from '@/lib/db';
 import { TrendingUp, TrendingDown, Clock, BarChart3, DollarSign, TrendingUp as UpIcon, TrendingDown as DownIcon } from 'lucide-react';
 import SegmentChart from '@/components/SegmentChart';
 import SchemaUpdateForm from '@/components/SchemaUpdateForm';
+import PointAnalysisCard from '@/components/PointAnalysisCard';
 import BackButton from '@/components/BackButton';
 import {
   Box,
@@ -180,6 +181,9 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
               </VStack>
             </Card.Body>
           </Card.Root>
+          
+          {/* Point Analysis */}
+          <PointAnalysisCard analysis={{...analysis, pointsData: pointsData}} />
 
           {/* Schema Update Form */}
           <Card.Root>

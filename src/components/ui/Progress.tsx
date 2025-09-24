@@ -1,144 +1,62 @@
-/**
- * Progress Indicator Component
- * ===========================
- * 
- * Custom progress component using Chakra UI v3
- * Shows loading states and progress
- */
-
 'use client';
 
-import { Box, Text, HStack } from '@chakra-ui/react';
+/**
+ * Custom Progress Component for Chakra UI v3
+ * =========================================
+ * 
+ * A simple progress bar component that works with Chakra UI v3
+ */
+
+import { Box } from '@chakra-ui/react';
+import { CSSProperties } from 'react';
 
 interface ProgressProps {
   value: number;
   max?: number;
-  size?: 'sm' | 'md' | 'lg';
-  colorPalette?: 'blue' | 'green' | 'red' | 'orange' | 'purple';
-  showLabel?: boolean;
-  label?: string;
-  className?: string;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  colorPalette?: string;
+  borderRadius?: string;
 }
 
 export function Progress({ 
   value, 
   max = 100, 
-  size = 'md',
-  colorPalette = 'blue',
-  showLabel = false,
-  label,
-  className = ''
+  size = 'md', 
+  colorPalette = 'blue', 
+  borderRadius = 'md' 
 }: ProgressProps) {
-  const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+  // Calculate percentage
+  const percentage = Math.min(100, Math.max(0, (value / max) * 100));
   
-  const sizeStyles = {
-    sm: { height: '4px', fontSize: 'xs' },
-    md: { height: '6px', fontSize: 'sm' },
-    lg: { height: '8px', fontSize: 'md' },
+  // Size mapping
+  const sizeMap = {
+    xs: '0.25rem',
+    sm: '0.375rem',
+    md: '0.5rem',
+    lg: '0.75rem'
   };
-
+  
+  const height = sizeMap[size] || sizeMap.md;
+  
   return (
-    <Box className={`animate-fade-in ${className}`}>
-      {showLabel && (
-        <HStack justify="space-between" mb={2}>
-          <Text fontSize={sizeStyles[size].fontSize} color="fg.muted">
-            {label || 'Progress'}
-          </Text>
-          <Text fontSize={sizeStyles[size].fontSize} color="fg.default" fontWeight="medium">
-            {Math.round(percentage)}%
-          </Text>
-        </HStack>
-      )}
-      
+    <Box
+      position="relative"
+      height={height}
+      width="100%"
+      bg="bg.subtle"
+      borderRadius={borderRadius}
+      overflow="hidden"
+    >
       <Box
-        w="100%"
-        h={sizeStyles[size].height}
-        bg="bg.subtle"
-        rounded="full"
-        overflow="hidden"
-      >
-        <Box
-          h="100%"
-          bg={`${colorPalette}.500`}
-          rounded="full"
-          transition="width 0.3s ease"
-          style={{ width: `${percentage}%` }}
-          className="animate-scale-in"
-        />
-      </Box>
-    </Box>
-  );
-}
-
-// Circular Progress
-interface CircularProgressProps {
-  value: number;
-  max?: number;
-  size?: number;
-  colorPalette?: 'blue' | 'green' | 'red' | 'orange' | 'purple';
-  showLabel?: boolean;
-  label?: string;
-  className?: string;
-}
-
-export function CircularProgress({ 
-  value, 
-  max = 100, 
-  size = 40,
-  colorPalette = 'blue',
-  showLabel = false,
-  label,
-  className = ''
-}: CircularProgressProps) {
-  const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
-  const radius = (size - 4) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-  return (
-    <Box className={`animate-scale-in ${className}`}>
-      <Box position="relative" display="inline-block">
-        <svg
-          width={size}
-          height={size}
-          style={{ transform: 'rotate(-90deg)' }}
-        >
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="var(--chakra-colors-bg-subtle)"
-            strokeWidth="2"
-            fill="none"
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={`var(--chakra-colors-${colorPalette}-500)`}
-            strokeWidth="2"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            transition="stroke-dashoffset 0.3s ease"
-          />
-        </svg>
-        
-        {showLabel && (
-          <Box
-            position="absolute"
-            top="50%"
-            left="50%"
-            transform="translate(-50%, -50%)"
-            textAlign="center"
-          >
-            <Text fontSize="xs" color="fg.muted" fontWeight="medium">
-              {label || `${Math.round(percentage)}%`}
-            </Text>
-          </Box>
-        )}
-      </Box>
+        position="absolute"
+        top={0}
+        left={0}
+        height="100%"
+        width={`${percentage}%`}
+        bg={`${colorPalette}.500`}
+        transition="width 0.3s ease-in-out"
+        borderRadius={borderRadius}
+      />
     </Box>
   );
 }
