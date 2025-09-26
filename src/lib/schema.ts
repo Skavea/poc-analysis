@@ -5,7 +5,7 @@
  * DrizzleORM schema definitions for type-safe database operations
  */
 
-import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, unique, text } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, text } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';

@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { pointsData, x0, minPrice, maxPrice, averagePrice } = segmentData;
+    const { pointsData, minPrice, maxPrice, averagePrice } = segmentData;
     
     // Calculate Y-axis domain with percentage-based padding (7%)
     const minPriceNum = Number(minPrice);
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
  * Generate an SVG chart as a string
  */
 function generateSVGChart(
-  pointsData: any[],
+  pointsData: Array<{ timestamp: string; close: number }>,
   width: number,
   height: number,
   segmentId: string,

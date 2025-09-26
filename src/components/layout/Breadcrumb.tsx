@@ -2,7 +2,7 @@
 
 import { ChevronRight, Home } from 'lucide-react';
 import Link from 'next/link';
-import { HStack, Text, Box } from '@chakra-ui/react';
+import { HStack, Text } from '@chakra-ui/react';
 
 interface BreadcrumbItem {
   label: string;

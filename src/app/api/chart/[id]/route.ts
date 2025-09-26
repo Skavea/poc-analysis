@@ -10,10 +10,10 @@ import { DatabaseService } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     
     // Handle both direct chart IDs and segment IDs
     let chartImage;

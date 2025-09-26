@@ -22,7 +22,6 @@ import {
   Text, 
   Badge, 
   Button, 
-  ButtonGroup,
   Heading
 } from '@chakra-ui/react';
 import { Progress } from '@/components/ui/Progress';
@@ -30,9 +29,6 @@ import { toast } from '@/components/ui/toaster';
 import { 
   ChevronLeft, 
   ChevronRight, 
-  TrendingUp, 
-  TrendingDown, 
-  AlignJustify,
   Check,
   X
 } from 'lucide-react';
@@ -42,7 +38,7 @@ interface SegmentSlideshowProps {
   symbol: string;
 }
 
-export default function SegmentSlideshow({ segments, symbol }: SegmentSlideshowProps) {
+export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -67,26 +63,8 @@ export default function SegmentSlideshow({ segments, symbol }: SegmentSlideshowP
     }
   }, [currentIndex]);
   
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') {
-        goToNext();
-      } else if (e.key === 'ArrowLeft') {
-        goToPrevious();
-      } else if (e.key === 'r' || e.key === 'R') {
-        classifySegment('R');
-      } else if (e.key === 'v' || e.key === 'V') {
-        classifySegment('V');
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [goToNext, goToPrevious]);
-  
   // Classification function
-  const classifySegment = async (schemaType: 'R' | 'V' | 'UNCLASSIFIED') => {
+  const classifySegment = useCallback(async (schemaType: 'R' | 'V' | 'UNCLASSIFIED') => {
     if (loading) return;
     
     setLoading(true);
@@ -116,9 +94,9 @@ export default function SegmentSlideshow({ segments, symbol }: SegmentSlideshowP
       toast({
         title: 'Classification updated',
         description: `Segment classified as ${schemaType}`,
-        status: 'success',
+        type: 'success',
         duration: 2000,
-        isClosable: true,
+        closable: true,
       });
       
       // Move to next segment automatically
@@ -135,15 +113,33 @@ export default function SegmentSlideshow({ segments, symbol }: SegmentSlideshowP
       toast({
         title: 'Error',
         description: 'Failed to update classification',
-        status: 'error',
+        type: 'error',
         duration: 3000,
-        isClosable: true,
+        closable: true,
       });
       console.error('Error updating schema:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentSegment, loading, currentIndex, goToNext, router, segments]);
+  
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        goToNext();
+      } else if (e.key === 'ArrowLeft') {
+        goToPrevious();
+      } else if (e.key === 'r' || e.key === 'R') {
+        classifySegment('R');
+      } else if (e.key === 'v' || e.key === 'V') {
+        classifySegment('V');
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [goToNext, goToPrevious, classifySegment]);
   
   if (!currentSegment) {
     return <Box>No segments available</Box>;

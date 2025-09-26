@@ -5,7 +5,6 @@
  * Utilities for chart generation, SVG manipulation, and database integration
  */
 
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Generate a chart SVG using the server API

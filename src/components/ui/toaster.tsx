@@ -7,13 +7,13 @@
  * Centralized toast notification system for Chakra UI v3
  */
 
-import { createToaster } from '@chakra-ui/react';
+import { createToaster, Toaster as ChakraToaster } from '@chakra-ui/react';
 
-// Create and export the Toaster component and toast function
-export const { Toaster, toast } = createToaster({
-  defaultOptions: {
-    duration: 3000,
-    isClosable: true,
-    position: 'bottom-right',
-  }
-});
+// Create and export the toast store
+const toastStore = createToaster({});
+
+// Export the toast function
+export const toast = toastStore.create;
+
+// Export the Toaster component
+export const Toaster = ChakraToaster;

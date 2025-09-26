@@ -7,7 +7,6 @@
  */
 
 import { DatabaseService } from '@/lib/db';
-import { StockData } from '@/lib/schema';
 import { 
   Box, 
   VStack, 
@@ -20,9 +19,8 @@ import {
   Button,
   Heading,
   Flex,
-  Spacer,
 } from "@chakra-ui/react";
-import { BarChart3, Calendar, Database, TrendingUp, Plus, Eye } from 'lucide-react';
+import { BarChart3, Calendar, Database } from 'lucide-react';
 import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
 import AddStockForm from '@/components/AddStockForm';
@@ -49,7 +47,7 @@ async function StockListServer() {
         </Card.Root>
       ) : (
             <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)", xl: "repeat(4, 1fr)" }} gap={6}>
-              {stocks.map((stock, index) => (
+              {stocks.map((stock) => (
                 <GridItem key={stock.id} className="stagger-item">
                   <Card.Root
                     className="hover-lift"

@@ -14,9 +14,8 @@ import {
   Text,
   Heading,
   Container,
-  useBreakpointValue,
 } from "@chakra-ui/react";
-import { BarChart3, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 // We're implementing our own inline breadcrumb
 import Link from "next/link";
@@ -36,12 +35,6 @@ interface NavigationProps {
 
 export default function Navigation({ children, breadcrumbs, pageTitle, pageSubtitle, pageActions }: NavigationProps) {
   // Responsive adjustments
-  const showSubtitle = useBreakpointValue({ base: false, md: true });
-  const logoSize = useBreakpointValue({ base: 24, md: 28 });
-  const headingSize = useBreakpointValue({ 
-    base: "md", 
-    md: "lg" 
-  }) as "md" | "lg" | "sm" | "xl" | "2xl" | "xs" | "3xl" | "4xl" | "5xl" | "6xl" | "7xl" | undefined;
   
   return (
     <Box minH="100vh" bg="bg.canvas">

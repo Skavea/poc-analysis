@@ -6,7 +6,7 @@
  * Shows original points, points in region, and final points
  */
 
-import { Card, VStack, HStack, Text, Badge, Box } from "@chakra-ui/react";
+import { Card, VStack, HStack, Text, Badge } from "@chakra-ui/react";
 import { AnalysisResultWithChart } from "@/lib/schema";
 
 interface PointAnalysisCardProps {
@@ -14,7 +14,6 @@ interface PointAnalysisCardProps {
 }
 
 export default function PointAnalysisCard({ analysis }: PointAnalysisCardProps) {
-  const hasAdjustment = analysis.originalPointCount !== analysis.pointCount;
   
   return (
     <Card.Root>

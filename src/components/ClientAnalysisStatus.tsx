@@ -13,16 +13,16 @@ export default function ClientAnalysisStatus({ symbol, initialStatus = false }: 
   
   // Listen for changes in status via a custom event
   useEffect(() => {
-    const handleStatusChange = (event: CustomEvent) => {
+    const handleStatusChange = (event: CustomEvent<{ hasAnalysis: boolean }>) => {
       setHasExistingAnalysis(event.detail.hasAnalysis);
     };
     
     // Add event listener
-    window.addEventListener('analysisStatusChanged' as any, handleStatusChange as any);
+    window.addEventListener('analysisStatusChanged', handleStatusChange as EventListener);
     
     // Clean up
     return () => {
-      window.removeEventListener('analysisStatusChanged' as any, handleStatusChange as any);
+      window.removeEventListener('analysisStatusChanged', handleStatusChange as EventListener);
     };
   }, []);
   

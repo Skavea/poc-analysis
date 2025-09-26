@@ -8,7 +8,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { DatabaseService } from './db';
 import { StockAnalysisService } from './stockAnalysisService';
 
@@ -47,7 +46,7 @@ export async function runAnalysisAction(symbol: string) {
     const analysisService = new StockAnalysisService();
     
     // Extract segments from existing data
-    const segments = analysisService.extractSegments(symbol, existingStock.data);
+    const segments = analysisService.extractSegments(symbol, existingStock.data as Record<string, unknown>);
     
     if (segments.length === 0) {
       return { error: 'No segments could be extracted from the data' };
@@ -76,7 +75,7 @@ export async function updateSchemaAction(segmentId: string, schemaType: 'R' | 'V
   }
 }
 
-export async function deleteStockAction(symbol: string) {
+export async function deleteStockAction() {
   try {
     // Note: This would need to be implemented in DatabaseService
     // await DatabaseService.deleteStock(symbol);

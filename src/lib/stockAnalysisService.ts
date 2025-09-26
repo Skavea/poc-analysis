@@ -37,7 +37,7 @@ export class StockAnalysisService {
   /**
    * Fetch stock data from Alpha Vantage API
    */
-  async fetchStockData(symbol: string): Promise<any> {
+  async fetchStockData(symbol: string): Promise<Record<string, unknown>> {
     try {
       if (!this.apiKey) {
         throw new Error('ALPHA_VANTAGE_API_KEY is required');
@@ -71,7 +71,7 @@ export class StockAnalysisService {
   /**
    * Save stock data to database
    */
-  async saveStockData(symbol: string, data: any): Promise<string> {
+  async saveStockData(symbol: string, data: Record<string, unknown>): Promise<string> {
     const totalPoints = Object.keys(data).length;
     const date = new Date().toISOString().split('T')[0];
     const id = `${symbol.toUpperCase()}_${date}`;
@@ -98,7 +98,7 @@ export class StockAnalysisService {
    * @param data Raw stock price data
    * @returns Array of analyzed segments with filtering applied
    */
-  extractSegments(symbol: string, data: any): Array<{
+  extractSegments(symbol: string, data: Record<string, unknown>): Array<{
     id: string;
     symbol: string;
     date: string;
@@ -110,7 +110,14 @@ export class StockAnalysisService {
     maxPrice: number;
     averagePrice: number;
     trendDirection: 'UP' | 'DOWN';
-    pointsData: any;
+    pointsData: Array<{
+      timestamp: string;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }>;
     originalPointCount: number;
     pointsInRegion: number;
   }> {
@@ -157,8 +164,30 @@ export class StockAnalysisService {
     symbol: string, 
     date: string, 
     timestamps: string[], 
-    data: any
-  ): Array<any> {
+    data: Record<string, unknown>
+  ): Array<{
+    id: string;
+    symbol: string;
+    date: string;
+    segmentStart: string;
+    segmentEnd: string;
+    pointCount: number;
+    x0: number;
+    minPrice: number;
+    maxPrice: number;
+    averagePrice: number;
+    trendDirection: 'UP' | 'DOWN';
+    pointsData: Array<{
+      timestamp: string;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }>;
+    originalPointCount: number;
+    pointsInRegion: number;
+  }> {
     const segments = [];
     const segmentDuration = 120; // 2 hours in minutes
     const maxSegmentsPerDay = 6; // Maximum segments per day
@@ -197,15 +226,36 @@ export class StockAnalysisService {
     symbol: string, 
     date: string, 
     timestamps: string[], 
-    data: any
-  ): any | null {
+    data: Record<string, unknown>
+  ): {
+    id: string;
+    symbol: string;
+    date: string;
+    segmentStart: string;
+    segmentEnd: string;
+    pointCount: number;
+    x0: number;
+    minPrice: number;
+    maxPrice: number;
+    averagePrice: number;
+    trendDirection: 'UP' | 'DOWN';
+    pointsData: Array<{
+      timestamp: string;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }>;
+    originalPointCount: number;
+    pointsInRegion: number;
+  } | null {
     if (timestamps.length < 6) return null;
 
-    const originalTimestamps = [...timestamps];
     const originalPointCount = timestamps.length;
     
     // Step 1: Calculate initial metrics
-    const prices = timestamps.map(ts => parseFloat(data[ts]['4. close']));
+    const prices = timestamps.map(ts => parseFloat((data[ts] as Record<string, unknown>)['4. close'] as string));
     const x0 = prices[prices.length - 1]; // Last price (most recent)
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
@@ -262,7 +312,6 @@ export class StockAnalysisService {
       );
       
       // Calculate metrics after reduction
-      const reducedPrices = adjustedTimestamps.map(ts => parseFloat(data[ts]['4. close']));
       const reducedPointCount = adjustedTimestamps.length;
       
       console.log(`Reduced to ${reducedPointCount} points`);
@@ -301,12 +350,12 @@ export class StockAnalysisService {
     }
 
     // Step 5: Recalculate all metrics based on the final adjusted timestamps
-    const finalPrices = adjustedTimestamps.map(ts => parseFloat(data[ts]['4. close']));
+    const finalPrices = adjustedTimestamps.map(ts => parseFloat((data[ts] as Record<string, unknown>)['4. close'] as string));
     const finalX0 = finalPrices[finalPrices.length - 1]; // Last price (most recent)
     const finalMinPrice = Math.min(...finalPrices);
     const finalMaxPrice = Math.max(...finalPrices);
     const finalAveragePrice = (finalMinPrice + finalMaxPrice) / 2;
-    const finalTrendDirection = finalX0 > finalAveragePrice ? 'UP' : 'DOWN';
+    const finalTrendDirection: 'UP' | 'DOWN' = finalX0 > finalAveragePrice ? 'UP' : 'DOWN';
     
     // Count final points in region
     const finalPointsInRegion = finalPrices.filter(price => {
@@ -320,14 +369,17 @@ export class StockAnalysisService {
     console.log(`Final analysis for ${symbol}: ${adjustedTimestamps.length} total points, ${finalPointsInRegion} in ${finalTrendDirection} region`);
 
     // Create segment data from adjusted timestamps
-    const pointsData = adjustedTimestamps.map(ts => ({
-      timestamp: ts,
-      open: parseFloat(data[ts]['1. open']),
-      high: parseFloat(data[ts]['2. high']),
-      low: parseFloat(data[ts]['3. low']),
-      close: parseFloat(data[ts]['4. close']),
-      volume: parseFloat(data[ts]['5. volume'])
-    }));
+    const pointsData = adjustedTimestamps.map(ts => {
+      const dataPoint = data[ts] as Record<string, unknown>;
+      return {
+        timestamp: ts,
+        open: parseFloat(dataPoint['1. open'] as string),
+        high: parseFloat(dataPoint['2. high'] as string),
+        low: parseFloat(dataPoint['3. low'] as string),
+        close: parseFloat(dataPoint['4. close'] as string),
+        volume: parseFloat(dataPoint['5. volume'] as string)
+      };
+    });
 
     // Generate a unique ID that's URL-friendly
     // Format: SYMBOL_DATE_TIMESTAMP (using UUID to ensure uniqueness)
@@ -364,7 +416,29 @@ export class StockAnalysisService {
   /**
    * Save analysis results to database
    */
-  async saveAnalysisResults(segments: any[]): Promise<number> {
+  async saveAnalysisResults(segments: Array<{
+    id: string;
+    symbol: string;
+    date: string;
+    segmentStart: string;
+    segmentEnd: string;
+    pointCount: number;
+    x0: number;
+    minPrice: number;
+    maxPrice: number;
+    averagePrice: number;
+    trendDirection: 'UP' | 'DOWN';
+    pointsData: Array<{
+      timestamp: string;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }>;
+    originalPointCount: number;
+    pointsInRegion: number;
+  }>): Promise<number> {
     let savedCount = 0;
     
     for (const segment of segments) {
@@ -415,10 +489,10 @@ export class StockAnalysisService {
    * @returns Array of indices to keep
    */
   private removeRedundantPoints(timestamps: string[], prices: number[]): number[] {
-    if (prices.length < 3) return Array.from({ length: prices.length }, (_, i) => i);
+    if (prices.length < 3) return Array.from({ length: prices.length }, (_, index) => index);
     
     // Keep track of which indices to keep (start with all)
-    const indicesToKeep = Array.from({ length: prices.length }, (_, i) => true);
+    const indicesToKeep = Array.from({ length: prices.length }, () => true);
     
     // Check for plateaus and constant derivatives
     for (let i = 0; i < prices.length - 2; i++) {
@@ -475,11 +549,11 @@ export class StockAnalysisService {
         message: `Successfully processed ${symbol}`,
         segmentsCreated: savedCount
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error processing ${symbol}:`, error);
       return {
         success: false,
-        message: `Error processing ${symbol}: ${error.message}`,
+        message: `Error processing ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`,
         segmentsCreated: 0
       };
     }

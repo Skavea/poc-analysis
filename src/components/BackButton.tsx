@@ -26,10 +26,10 @@ export default function BackButton({ href, label = 'Back' }: BackButtonProps) {
       variant="outline"
       size="md"
       onClick={handleClick}
-      leftIcon={<ArrowLeft size={16} />}
       fontWeight="medium"
       px={4}
     >
+      <ArrowLeft size={16} style={{ marginRight: '8px' }} />
       {label}
     </Button>
   );

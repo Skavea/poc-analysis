@@ -8,7 +8,6 @@
  */
 
 import { Box } from '@chakra-ui/react';
-import { CSSProperties } from 'react';
 
 interface ProgressProps {
   value: number;

@@ -17,7 +17,7 @@ export interface StockData {
   id: string;
   symbol: string;
   date: string;
-  data: any;
+  data: Record<string, unknown>;
   total_points: number;
   created_at: string;
 }
@@ -35,7 +35,14 @@ export interface AnalysisResult {
   average_price: number;
   trend_direction: 'UP' | 'DOWN';
   schema_type: 'R' | 'V' | 'UNCLASSIFIED';
-  points_data: any;
+  points_data: Array<{
+    timestamp: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>;
   created_at: string;
 }
 
@@ -71,7 +78,7 @@ export class DatabaseService {
   static async saveStockDataset(data: {
     symbol: string;
     date: string;
-    data: any;
+    data: Record<string, unknown>;
     total_points: number;
   }): Promise<void> {
     await sql`
@@ -140,7 +147,14 @@ export class DatabaseService {
     max_price: number;
     average_price: number;
     trend_direction: 'UP' | 'DOWN';
-    points_data: any;
+    points_data: Array<{
+      timestamp: string;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }>;
   }): Promise<void> {
     await sql`
       INSERT INTO analysis_results (

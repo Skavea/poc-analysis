@@ -14,13 +14,9 @@ import {
   NewStockData, 
   AnalysisResult, 
   NewAnalysisResult,
-  StockDataWithPoints,
-  AnalysisResultWithChart,
   ChartImage,
-  NewChartImage,
-  schemaTypeSchema,
-  trendDirectionSchema,
-  chartFormatSchema
+  AnalysisResultWithChart,
+  schemaTypeSchema
 } from './schema';
 
 // Environment validation function
@@ -34,7 +30,6 @@ function validateEnvironment() {
 }
 
 // Database connection with proper singleton pattern for Next.js
-let db: ReturnType<typeof drizzle> | null = null;
 
 export function getDatabase() {
   // Use global variable to persist connection across module reloads in development

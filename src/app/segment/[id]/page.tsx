@@ -10,7 +10,7 @@
 
 import { use } from 'react';
 import { DatabaseService } from '@/lib/db';
-import { TrendingUp, TrendingDown, Clock, BarChart3, DollarSign, TrendingUp as UpIcon, TrendingDown as DownIcon } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import SegmentChart from '@/components/SegmentChart';
 import SchemaUpdateForm from '@/components/SchemaUpdateForm';
 import PointAnalysisCard from '@/components/PointAnalysisCard';
@@ -24,10 +24,7 @@ import {
   Grid,
   GridItem,
   Badge,
-  Button,
   Heading,
-  Flex,
-  Spacer,
 } from "@chakra-ui/react";
 import Navigation from '@/components/layout/Navigation';
 
@@ -212,18 +209,6 @@ function formatTime(dateString: string) {
   });
 }
 
-function getSchemaTypeColor(schemaType: string) {
-  switch (schemaType) {
-    case 'R':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'V':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'UNCLASSIFIED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
 
 function getTrendIcon(trend: string) {
   return trend === 'UP' ? (

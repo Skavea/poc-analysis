@@ -7,7 +7,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { StockAnalysisService } from '@/lib/stockAnalysisService';
-import { DatabaseService } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {

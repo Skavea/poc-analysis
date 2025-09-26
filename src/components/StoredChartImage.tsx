@@ -22,7 +22,6 @@ interface StoredChartImageProps {
 
 export default function StoredChartImage({
   segmentId,
-  width = 800,
   height = 400,
   className = '',
   showControls = true,
@@ -69,7 +68,8 @@ export default function StoredChartImage({
         <Box p={4} border="1px solid" borderColor="red.300" bg="red.50" borderRadius="md" width="100%">
           <Text color="red.500">{error}</Text>
         </Box>
-        <Button onClick={() => setChartUrl(getChartUrl(segmentId))} leftIcon={<RefreshCw size={16} />}>
+        <Button onClick={() => setChartUrl(getChartUrl(segmentId))}>
+          <RefreshCw size={16} style={{ marginRight: '8px' }} />
           Try Again
         </Button>
       </VStack>
@@ -94,13 +94,14 @@ export default function StoredChartImage({
             </VStack>
           </Box>
         ) : (
-          <Box
-            as="img"
+          <img
             src={chartUrl}
             alt={`Chart for segment ${segmentId}`}
-            width="100%"
-            height="100%"
-            objectFit="contain"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain'
+            }}
           />
         )}
       </Box>
@@ -110,21 +111,21 @@ export default function StoredChartImage({
           <Button
             size="sm"
             onClick={handleRegenerateChart}
-            leftIcon={<RefreshCw size={16} />}
-            isLoading={loading}
+            loading={loading}
             loadingText="Regenerating"
             colorPalette="blue"
             variant="outline"
           >
+            <RefreshCw size={16} style={{ marginRight: '8px' }} />
             Regenerate
           </Button>
           <Button
             size="sm"
             onClick={handleDownloadChart}
-            leftIcon={<Download size={16} />}
             colorPalette="green"
             variant="outline"
           >
+            <Download size={16} style={{ marginRight: '8px' }} />
             Download
           </Button>
         </HStack>

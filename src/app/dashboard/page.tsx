@@ -14,7 +14,6 @@ import {
   Box, 
   Card, 
   Grid, 
-  GridItem, 
   Heading, 
   Text, 
   VStack, 
@@ -28,7 +27,7 @@ import {
   StatGroup
 } from '@chakra-ui/react';
 import { Progress } from '@/components/ui/Progress';
-import { BarChart3, TrendingUp, TrendingDown, Play, PieChart } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, Play } from 'lucide-react';
 
 async function fetchStats() {
   return await DatabaseService.getAnalysisStats();

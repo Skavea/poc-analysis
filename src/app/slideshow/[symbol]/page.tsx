@@ -11,7 +11,7 @@ import { DatabaseService } from '@/lib/db';
 import { AnalysisResult } from '@/lib/schema';
 import Navigation from '@/components/layout/Navigation';
 import SegmentSlideshow from '@/components/SegmentSlideshow';
-import { Box, Text, Heading, Button, HStack, Spacer } from '@chakra-ui/react';
+import { Box, Text, Heading, Button, HStack } from '@chakra-ui/react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 

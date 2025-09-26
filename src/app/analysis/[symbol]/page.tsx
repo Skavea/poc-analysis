@@ -11,11 +11,8 @@
 
 import { use } from 'react';
 import { DatabaseService } from '@/lib/db';
-import { AnalysisResult } from '@/lib/schema';
-import { TrendingUp, TrendingDown, Clock, BarChart3, Play, Filter, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, BarChart3, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import RunAnalysisButton from '@/components/RunAnalysisButton';
-import AnalysisStatusAction from '@/components/AnalysisStatusAction';
 import AnalysisStatusScript from '@/components/AnalysisStatusScript';
 import ClientAnalysisStatus from '@/components/ClientAnalysisStatus';
 import AnalysisFilter from '@/components/AnalysisFilter';
@@ -28,10 +25,8 @@ import {
   Grid,
   GridItem,
   Badge,
-  Button,
   Heading,
   Flex,
-  Spacer,
 } from "@chakra-ui/react";
 import Navigation from '@/components/layout/Navigation';
 
@@ -231,26 +226,6 @@ function formatDate(dateString: string) {
   });
 }
 
-function getSchemaTypeColor(schemaType: string) {
-  switch (schemaType) {
-    case 'R':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'V':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'UNCLASSIFIED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
-
-function getTrendIcon(trend: string) {
-  return trend === 'UP' ? (
-    <TrendingUp size={16} color="green.500" />
-  ) : (
-    <TrendingDown size={16} color="red.500" />
-  );
-}
 
 // Main page component
 export default function AnalysisPage({ params, searchParams }: AnalysisPageProps) {

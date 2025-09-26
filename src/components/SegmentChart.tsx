@@ -89,7 +89,7 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
     );
   }
 
-  const CustomDot = (props: any) => {
+  const CustomDot = (props: { cx?: number; cy?: number; payload?: { timestamp: string } }) => {
     const { cx, cy, payload } = props;
     if (payload && payload.timestamp === pointsData[pointsData.length - 1]?.timestamp) {
       return (
@@ -109,7 +109,6 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
   const minPrice = Number(analysis.minPrice);
   const maxPrice = Number(analysis.maxPrice);
   const averagePrice = Number(analysis.averagePrice);
-  const x0Price = Number(analysis.x0);
   
   // Calculate Y-axis domain with percentage-based padding (7%)
   const priceRange = maxPrice - minPrice;
