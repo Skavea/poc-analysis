@@ -12,7 +12,7 @@ import { use } from 'react';
 import { DatabaseService } from '@/lib/db';
 import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import SegmentChart from '@/components/SegmentChart';
-import SchemaUpdateForm from '@/components/SchemaUpdateForm';
+import PatternClassificationForm from '@/components/PatternClassificationForm';
 import PointAnalysisCard from '@/components/PointAnalysisCard';
 import BackButton from '@/components/BackButton';
 import {
@@ -67,7 +67,11 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
             </Heading>
           </Card.Header>
           <Card.Body pt={0}>
-            <SegmentChart pointsData={pointsData} analysis={analysis} />
+            <SegmentChart 
+              pointsData={pointsData} 
+              analysis={analysis} 
+              patternPoint={analysis.patternPoint}
+            />
           </Card.Body>
         </Card.Root>
       </GridItem>
@@ -125,6 +129,26 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                       {analysis.trendDirection}
                     </Text>
                   </HStack>
+                </HStack>
+                
+                <HStack justify="space-between">
+                  <Text fontSize="sm" fontWeight="medium" color="fg.muted">
+                    Patterns
+                  </Text>
+                  {/* Debug: {JSON.stringify(analysis.patternPoint)} */}
+                  {analysis.patternPoint === null || analysis.patternPoint === 'UNCLASSIFIED' || analysis.patternPoint === 'unclassified' ? (
+                    <Badge colorPalette="gray" variant="subtle" size="sm">
+                      Unclassified
+                    </Badge>
+                  ) : analysis.patternPoint === '' || analysis.patternPoint === 'null' ? (
+                    <Badge colorPalette="red" variant="subtle" size="sm">
+                      Non
+                    </Badge>
+                  ) : (
+                    <Text fontSize="sm" fontWeight="semibold" color="#eab308">
+                      {new Date(analysis.patternPoint).toLocaleTimeString()}
+                    </Text>
+                  )}
                 </HStack>
                 
                 <HStack justify="space-between">
@@ -190,7 +214,12 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
               </Heading>
             </Card.Header>
             <Card.Body pt={0}>
-              <SchemaUpdateForm segmentId={analysis.id} initialSchemaType={analysis.schemaType} />
+              <PatternClassificationForm 
+                segmentId={analysis.id} 
+                initialSchemaType={analysis.schemaType}
+                initialPatternPoint={analysis.patternPoint}
+                pointsData={pointsData || []}
+              />
             </Card.Body>
           </Card.Root>
         </VStack>

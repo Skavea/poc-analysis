@@ -12,6 +12,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnalysisResult } from '@/lib/schema';
 import SegmentChart from './SegmentChart';
+import PatternClassificationForm from './PatternClassificationForm';
 import { 
   Box, 
   Card, 
@@ -41,6 +42,7 @@ interface SegmentSlideshowProps {
 export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [selectedPatternPoint, setSelectedPatternPoint] = useState<string | null>(null);
   const router = useRouter();
   
   const currentSegment = segments[currentIndex];
@@ -122,6 +124,18 @@ export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
       setLoading(false);
     }
   }, [currentSegment, loading, currentIndex, goToNext, router, segments]);
+
+  // Fonctions pour la sélection de points
+  const handlePointSelection = useCallback((timestamp: string) => {
+    setSelectedPatternPoint(timestamp);
+    toast({
+      title: 'Point sélectionné',
+      description: `Point sélectionné: ${new Date(timestamp).toLocaleTimeString()}`,
+      type: 'success',
+      duration: 2000,
+      closable: true,
+    });
+  }, []);
   
   // Keyboard navigation
   useEffect(() => {
@@ -216,7 +230,9 @@ export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
                   minPrice: currentSegment.minPrice,
                   maxPrice: currentSegment.maxPrice,
                   averagePrice: currentSegment.averagePrice
-                }} 
+                }}
+                selectedPoint={selectedPatternPoint}
+                patternPoint={currentSegment.patternPoint}
               />
             </Card.Body>
           </Card.Root>
@@ -246,53 +262,14 @@ export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
                     </Badge>
                   </Text>
                   
-                  <Box>
-                    <Text fontSize="sm" mb={2}>Select classification:</Text>
-                    <HStack width="100%" gap={0}>
-                      <Button 
-                        colorPalette={currentSegment.schemaType === 'R' ? 'red' : 'gray'}
-                        variant={currentSegment.schemaType === 'R' ? 'solid' : 'outline'}
-                        onClick={() => classifySegment('R')}
-                        flex={1}
-                        loading={loading && currentSegment.schemaType !== 'R'}
-                        borderRightRadius={0}
-                        borderRight="0"
-                      >
-                        <HStack gap={2}>
-                          <Check size={16} />
-                          <Text>R Schema</Text>
-                        </HStack>
-                      </Button>
-                      <Button 
-                        colorPalette={currentSegment.schemaType === 'V' ? 'purple' : 'gray'}
-                        variant={currentSegment.schemaType === 'V' ? 'solid' : 'outline'}
-                        onClick={() => classifySegment('V')}
-                        flex={1}
-                        loading={loading && currentSegment.schemaType !== 'V'}
-                        borderLeftRadius={0}
-                      >
-                        <HStack gap={2}>
-                          <Check size={16} />
-                          <Text>V Schema</Text>
-                        </HStack>
-                      </Button>
-                    </HStack>
-                  </Box>
-                  
-                  <Box>
-                    <Button 
-                      variant="outline" 
-                      colorPalette="gray" 
-                      width="100%" 
-                      onClick={() => classifySegment('UNCLASSIFIED')}
-                      loading={loading && currentSegment.schemaType === 'UNCLASSIFIED'}
-                    >
-                      <HStack gap={2}>
-                        <X size={16} />
-                        <Text>Reset Classification</Text>
-                      </HStack>
-                    </Button>
-                  </Box>
+                  {/* Nouveau formulaire de classification avec patterns */}
+                  <PatternClassificationForm
+                    segmentId={currentSegment.id}
+                    initialSchemaType={currentSegment.schemaType}
+                    initialPatternPoint={currentSegment.patternPoint}
+                    pointsData={Array.isArray(currentSegment.pointsData) ? currentSegment.pointsData : []}
+                    onPointSelect={handlePointSelection}
+                  />
                   
                   <Box mt={2} p={3} bg="bg.subtle" borderRadius="md">
                     <Text fontSize="xs" color="fg.muted">

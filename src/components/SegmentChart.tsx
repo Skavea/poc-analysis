@@ -36,9 +36,17 @@ interface SegmentChartProps {
     maxPrice: string;
     averagePrice: string;
   };
+  // Props pour la sélection de points
+  selectedPoint?: string | null;
+  patternPoint?: string | null;
 }
 
-export default function SegmentChart({ pointsData, analysis }: SegmentChartProps) {
+export default function SegmentChart({ 
+  pointsData, 
+  analysis,
+  selectedPoint = null,
+  patternPoint = null
+}: SegmentChartProps) {
   // Function to export chart as SVG
   const exportChartAsSVG = () => {
     try {
@@ -91,7 +99,42 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
 
   const CustomDot = (props: { cx?: number; cy?: number; payload?: { timestamp: string } }) => {
     const { cx, cy, payload } = props;
-    if (payload && payload.timestamp === pointsData[pointsData.length - 1]?.timestamp) {
+    if (!payload) return null;
+    
+    const isLastPoint = payload.timestamp === pointsData[pointsData.length - 1]?.timestamp;
+    const isSelectedPoint = selectedPoint === payload.timestamp;
+    const isPatternPoint = patternPoint === payload.timestamp;
+    
+    // Point pattern (jaune)
+    if (isPatternPoint) {
+      return (
+        <Dot
+          cx={cx}
+          cy={cy}
+          r={8}
+          fill="#eab308"
+          stroke="#ca8a04"
+          strokeWidth={3}
+        />
+      );
+    }
+    
+    // Point sélectionné (pattern)
+    if (isSelectedPoint) {
+      return (
+        <Dot
+          cx={cx}
+          cy={cy}
+          r={8}
+          fill="#8b5cf6"
+          stroke="#6d28d9"
+          strokeWidth={3}
+        />
+      );
+    }
+    
+    // Dernier point (X0)
+    if (isLastPoint) {
       return (
         <Dot
           cx={cx}
@@ -103,7 +146,18 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
         />
       );
     }
-    return null;
+    
+    // Points normaux
+    return (
+      <Dot
+        cx={cx}
+        cy={cy}
+        r={3}
+        fill="#94a3b8"
+        stroke="#64748b"
+        strokeWidth={1}
+      />
+    );
   };
 
   const minPrice = Number(analysis.minPrice);
@@ -118,7 +172,7 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
   const yAxisMax = maxPrice + padding;
 
   return (
-    <Box height="24rem">
+    <Box height="24rem" position="relative">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={pointsData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -167,6 +221,7 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
           />
         </LineChart>
       </ResponsiveContainer>
+
       
       {/* Legend */}
       <HStack mt={4} justify="space-between" align="center">
@@ -179,6 +234,18 @@ export default function SegmentChart({ pointsData, analysis }: SegmentChartProps
           <Box width="12px" height="12px" bg="red.500" rounded="full" />
           <Text>x0 (Last Point)</Text>
         </HStack>
+        {selectedPoint && (
+          <HStack gap={2}>
+            <Box width="12px" height="12px" bg="purple.500" rounded="full" />
+            <Text>Selected Point</Text>
+          </HStack>
+        )}
+        {patternPoint && (
+          <HStack gap={2}>
+            <Box width="12px" height="12px" bg="#eab308" rounded="full" />
+            <Text>Pattern Origin</Text>
+          </HStack>
+        )}
         <HStack gap={2}>
           <Box width="12px" height="4px" bg="purple.500" />
           <Text>Average</Text>
