@@ -15,7 +15,7 @@ import { TrendingUp, TrendingDown, Clock, BarChart3, ArrowRight } from 'lucide-r
 import Link from 'next/link';
 import AnalysisStatusScript from '@/components/AnalysisStatusScript';
 import ClientAnalysisStatus from '@/components/ClientAnalysisStatus';
-import AnalysisFilter from '@/components/AnalysisFilter';
+import AdvancedAnalysisFilter from '@/components/AdvancedAnalysisFilter';
 import {
   Box,
   VStack,
@@ -32,7 +32,11 @@ import Navigation from '@/components/layout/Navigation';
 
 interface AnalysisPageProps {
   params: Promise<{ symbol: string }>;
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ 
+    filter?: string;
+    schema?: string | string[];
+    pattern?: string | string[];
+  }>;
 }
 
 // Server component for analysis results with stats
@@ -42,7 +46,11 @@ async function AnalysisStatsServer({
   setHasExistingAnalysis 
 }: { 
   symbol: string;
-  searchParams: { filter?: string };
+  searchParams: { 
+    filter?: string;
+    schema?: string | string[];
+    pattern?: string | string[];
+  };
   setHasExistingAnalysis?: (value: boolean) => void;
 }) {
   const results = await DatabaseService.getAnalysisResults(symbol);
@@ -50,6 +58,12 @@ async function AnalysisStatsServer({
   const rCount = results.filter(r => r.schemaType === 'R').length;
   const vCount = results.filter(r => r.schemaType === 'V').length;
   const unclassifiedCount = results.filter(r => r.schemaType === 'UNCLASSIFIED').length;
+  
+  // Comptage des patterns
+  const patternYesCount = results.filter(r => r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== '').length;
+  const patternNoCount = results.filter(r => r.patternPoint === null || r.patternPoint === '' || r.patternPoint === 'null').length;
+  const patternUnclassifiedCount = results.filter(r => r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified').length;
+  
   const hasExistingAnalysis = results.length > 0;
   
   // If setHasExistingAnalysis is provided, call it with the current status
@@ -58,10 +72,31 @@ async function AnalysisStatsServer({
   }
 
   // Filter results based on search params
-  const filter = searchParams.filter || 'all';
-  const filteredResults = filter === 'all' 
-    ? results 
-    : results.filter(result => result.schemaType === filter);
+  const schemaFilters = Array.isArray(searchParams.schema) ? searchParams.schema : searchParams.schema ? [searchParams.schema] : [];
+  const patternFilters = Array.isArray(searchParams.pattern) ? searchParams.pattern : searchParams.pattern ? [searchParams.pattern] : [];
+  
+  let filteredResults = results;
+  
+  // Appliquer les filtres schema
+  if (schemaFilters.length > 0) {
+    filteredResults = filteredResults.filter(result => schemaFilters.includes(result.schemaType));
+  }
+  
+  // Appliquer les filtres pattern
+  if (patternFilters.length > 0) {
+    filteredResults = filteredResults.filter(result => {
+      if (patternFilters.includes('yes')) {
+        return result.patternPoint && result.patternPoint !== 'UNCLASSIFIED' && result.patternPoint !== 'unclassified' && result.patternPoint !== 'null' && result.patternPoint !== '';
+      }
+      if (patternFilters.includes('no')) {
+        return result.patternPoint === null || result.patternPoint === '' || result.patternPoint === 'null';
+      }
+      if (patternFilters.includes('unclassified')) {
+        return result.patternPoint === 'UNCLASSIFIED' || result.patternPoint === 'unclassified';
+      }
+      return false;
+    });
+  }
 
   return (
     <VStack gap={8} align="stretch">
@@ -70,49 +105,103 @@ async function AnalysisStatsServer({
       
 
 
-      {/* Stats and Filters */}
+      {/* Analysis Results et Filtres côte à côte */}
       <Card.Root>
-        <Card.Header pb={4}>
-          <Flex align="center" justify="space-between">
-            <Heading size="lg" color="fg.default">
-              Analysis Results
-            </Heading>
-            <AnalysisFilter 
-              totalCount={results.length}
-              rCount={rCount}
-              vCount={vCount}
-              unclassifiedCount={unclassifiedCount}
-            />
-          </Flex>
+        <Card.Header>
+          <Heading size="lg" color="fg.default">
+            Analysis Results
+          </Heading>
         </Card.Header>
+        <Card.Body>
+          <Grid templateColumns={{ base: "1fr", lg: "2fr 1fr" }} gap={8}>
+            {/* Encarts de statistiques */}
+            <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)" }} gap={6}>
+              {/* Encart Total et Classifiés */}
+              <Card.Root>
+                <Card.Header>
+                  <Heading size="md" color="fg.default">Résumé</Heading>
+                </Card.Header>
+                <Card.Body>
+                  <VStack gap={3} align="stretch">
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Total:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="blue.600">{results.length}</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Classifiés:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="green.600">
+                        {results.length - unclassifiedCount - patternUnclassifiedCount}
+                      </Text>
+                    </HStack>
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
 
-        <Card.Body pt={0}>
-          <HStack gap={6} justify="space-between" align="center">
-            <HStack gap={6}>
-              <HStack gap={2}>
-                <Text fontSize="sm" color="fg.muted">Total:</Text>
-                <Text fontSize="lg" fontWeight="bold" color="blue.600">{results.length}</Text>
-              </HStack>
-              <HStack gap={2}>
-                <Text fontSize="sm" color="fg.muted">R:</Text>
-                <Text fontSize="lg" fontWeight="bold" color="red.600">{rCount}</Text>
-              </HStack>
-              <HStack gap={2}>
-                <Text fontSize="sm" color="fg.muted">V:</Text>
-                <Text fontSize="lg" fontWeight="bold" color="purple.600">{vCount}</Text>
-              </HStack>
-              <HStack gap={2}>
-                <Text fontSize="sm" color="fg.muted">Unclassified:</Text>
-                <Text fontSize="lg" fontWeight="bold" color="gray.600">{unclassifiedCount}</Text>
-              </HStack>
-            </HStack>
-            <AnalysisFilter 
-              totalCount={results.length}
-              rCount={rCount}
-              vCount={vCount}
-              unclassifiedCount={unclassifiedCount}
-            />
-          </HStack>
+              {/* Encart Schema Type */}
+              <Card.Root>
+                <Card.Header>
+                  <Heading size="md" color="fg.default">Schema type:</Heading>
+                </Card.Header>
+                <Card.Body>
+                  <VStack gap={3} align="stretch">
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">R:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="red.600">{rCount}</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">V:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="purple.600">{vCount}</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">UNCLASSIFIED:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="gray.600">{unclassifiedCount}</Text>
+                    </HStack>
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
+
+              {/* Encart Patterns */}
+              <Card.Root>
+                <Card.Header>
+                  <Heading size="md" color="fg.default">Patterns:</Heading>
+                </Card.Header>
+                <Card.Body>
+                  <VStack gap={3} align="stretch">
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Oui:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="green.600">{patternYesCount}</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Non:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="red.600">{patternNoCount}</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">UNCLASSIFIED:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="gray.600">{patternUnclassifiedCount}</Text>
+                    </HStack>
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
+            </Grid>
+
+            {/* Filtres à droite */}
+            <Card.Root>
+              <Card.Header>
+                <Heading size="md" color="fg.default">Filtres</Heading>
+              </Card.Header>
+              <Card.Body>
+                <AdvancedAnalysisFilter 
+                  totalCount={results.length}
+                  rCount={rCount}
+                  vCount={vCount}
+                  unclassifiedCount={unclassifiedCount}
+                  patternYesCount={patternYesCount}
+                  patternNoCount={patternNoCount}
+                  patternUnclassifiedCount={patternUnclassifiedCount}
+                />
+              </Card.Body>
+            </Card.Root>
+          </Grid>
         </Card.Body>
       </Card.Root>
 
@@ -158,16 +247,25 @@ async function AnalysisStatsServer({
                           {result.trendDirection}
                         </Text>
                       </HStack>
-                      <Badge
-                        colorPalette={
-                          result.schemaType === 'R' ? 'red' :
-                          result.schemaType === 'V' ? 'purple' : 'gray'
-                        }
-                        variant="subtle"
-                        size="sm"
-                      >
-                        {result.schemaType === 'UNCLASSIFIED' ? 'Unclassified' : result.schemaType}
-                      </Badge>
+                      <HStack gap={2}>
+                        <Badge
+                          colorPalette={
+                            result.schemaType === 'R' ? 'red' :
+                            result.schemaType === 'V' ? 'purple' : 'gray'
+                          }
+                          variant="subtle"
+                          size="sm"
+                        >
+                          {result.schemaType === 'UNCLASSIFIED' ? 'Unclassified' : result.schemaType}
+                        </Badge>
+                        <Badge
+                          colorPalette={getPatternBadgeColor(getPatternStatus(result.patternPoint))}
+                          variant="subtle"
+                          size="sm"
+                        >
+                          P
+                        </Badge>
+                      </HStack>
                     </Flex>
                   </Card.Header>
 
@@ -224,6 +322,30 @@ function formatDate(dateString: string) {
     month: 'short',
     day: 'numeric'
   });
+}
+
+// Fonction pour déterminer le statut du pattern
+function getPatternStatus(patternPoint: string | null): 'yes' | 'no' | 'unclassified' {
+  if (patternPoint === null || patternPoint === '' || patternPoint === 'null') {
+    return 'no';
+  }
+  if (patternPoint === 'UNCLASSIFIED' || patternPoint === 'unclassified') {
+    return 'unclassified';
+  }
+  return 'yes';
+}
+
+// Fonction pour obtenir la couleur de la vignette P
+function getPatternBadgeColor(status: 'yes' | 'no' | 'unclassified'): string {
+  switch (status) {
+    case 'yes':
+      return 'green';
+    case 'no':
+      return 'red';
+    case 'unclassified':
+    default:
+      return 'gray';
+  }
 }
 
 
