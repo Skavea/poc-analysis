@@ -15,6 +15,9 @@ import SegmentChart from '@/components/SegmentChart';
 import PatternClassificationForm from '@/components/PatternClassificationForm';
 import PointAnalysisCard from '@/components/PointAnalysisCard';
 import BackButton from '@/components/BackButton';
+import NextAnalysisHandler from '@/components/NextAnalysisHandler';
+import ClassificationSuccessNotification from '@/components/ClassificationSuccessNotification';
+import ExportChartButton from '@/components/ExportChartButton';
 import {
   Box,
   VStack,
@@ -25,8 +28,10 @@ import {
   GridItem,
   Badge,
   Heading,
+  Button,
 } from "@chakra-ui/react";
 import Navigation from '@/components/layout/Navigation';
+import Link from 'next/link';
 
 interface SegmentPageProps {
   params: Promise<{ id: string }>;
@@ -55,6 +60,18 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   }
 
   const { pointsData, ...analysis } = segmentData;
+  
+  // Déterminer si l'élément est classifié
+  const isClassified = analysis.schemaType !== 'UNCLASSIFIED' || 
+    (analysis.patternPoint && analysis.patternPoint !== 'UNCLASSIFIED' && analysis.patternPoint !== 'unclassified' && analysis.patternPoint !== 'null' && analysis.patternPoint !== '');
+  
+  // Trouver le prochain élément non classifié
+  const allResults = await DatabaseService.getAllAnalysisResults();
+  const unclassifiedResults = allResults.filter(r => 
+    r.schemaType === 'UNCLASSIFIED' && 
+    (r.patternPoint === null || r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified' || r.patternPoint === 'null' || r.patternPoint === '')
+  );
+  const nextUnclassifiedId = unclassifiedResults.length > 0 ? unclassifiedResults[0].id : null;
 
   return (
     <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap={6} minH="calc(100vh - 200px)">
@@ -62,9 +79,12 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
       <GridItem>
         <Card.Root>
           <Card.Header pb={4}>
-            <Heading size="lg" color="fg.default">
-              Price Chart
-            </Heading>
+            <HStack justify="space-between" align="center">
+              <Heading size="lg" color="fg.default">
+                Price Chart
+              </Heading>
+              <ExportChartButton analysis={analysis} />
+            </HStack>
           </Card.Header>
           <Card.Body pt={0}>
             <SegmentChart 
@@ -72,6 +92,36 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
               analysis={analysis} 
               patternPoint={analysis.patternPoint}
             />
+            
+            {/* Legend */}
+            <Box mt={4} display="flex" flexWrap="wrap" gap={4} fontSize="sm">
+              <HStack gap={2}>
+                <Box width="12px" height="12px" bg="blue.500" rounded="full" />
+                <Text>Price</Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="12px" height="12px" bg="red.500" rounded="full" />
+                <Text>x0 (Last Point)</Text>
+              </HStack>
+              {analysis.patternPoint && analysis.patternPoint !== 'UNCLASSIFIED' && analysis.patternPoint !== 'unclassified' && analysis.patternPoint !== 'null' && analysis.patternPoint !== '' && (
+                <HStack gap={2}>
+                  <Box width="12px" height="12px" bg="#eab308" rounded="full" />
+                  <Text>Pattern Origin</Text>
+                </HStack>
+              )}
+              <HStack gap={2}>
+                <Box width="12px" height="4px" bg="purple.500" />
+                <Text>Average</Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="12px" height="4px" bg="red.500" />
+                <Text>Min</Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="12px" height="4px" bg="green.500" />
+                <Text>Max</Text>
+              </HStack>
+            </Box>
           </Card.Body>
         </Card.Root>
       </GridItem>
@@ -79,6 +129,25 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
       {/* Right Column - Analysis Data */}
       <GridItem>
         <VStack gap={6} align="stretch">
+          {/* Update Classification - En haut si non classifié */}
+          {!isClassified && (
+            <Card.Root>
+              <Card.Header pb={4}>
+                <Heading size="lg" color="fg.default">
+                  Update Classification
+                </Heading>
+              </Card.Header>
+              <Card.Body pt={0}>
+                <PatternClassificationForm 
+                  segmentId={analysis.id} 
+                  initialSchemaType={analysis.schemaType}
+                  initialPatternPoint={analysis.patternPoint}
+                  pointsData={pointsData || []}
+                />
+              </Card.Body>
+            </Card.Root>
+          )}
+
           {/* Analysis Summary */}
           <Card.Root>
             <Card.Header pb={4}>
@@ -206,22 +275,24 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
           {/* Point Analysis */}
           <PointAnalysisCard analysis={{...analysis, pointsData: pointsData}} />
 
-          {/* Schema Update Form */}
-          <Card.Root>
-            <Card.Header pb={4}>
-              <Heading size="lg" color="fg.default">
-                Update Classification
-              </Heading>
-            </Card.Header>
-            <Card.Body pt={0}>
-              <PatternClassificationForm 
-                segmentId={analysis.id} 
-                initialSchemaType={analysis.schemaType}
-                initialPatternPoint={analysis.patternPoint}
-                pointsData={pointsData || []}
-              />
-            </Card.Body>
-          </Card.Root>
+          {/* Schema Update Form - En bas si classifié */}
+          {isClassified && (
+            <Card.Root>
+              <Card.Header pb={4}>
+                <Heading size="lg" color="fg.default">
+                  Update Classification
+                </Heading>
+              </Card.Header>
+              <Card.Body pt={0}>
+                <PatternClassificationForm 
+                  segmentId={analysis.id} 
+                  initialSchemaType={analysis.schemaType}
+                  initialPatternPoint={analysis.patternPoint}
+                  pointsData={pointsData || []}
+                />
+              </Card.Body>
+            </Card.Root>
+          )}
         </VStack>
       </GridItem>
     </Grid>
@@ -252,9 +323,30 @@ export default function SegmentPage({ params }: SegmentPageProps) {
   const resolvedParams = use(params);
   const segmentId = resolvedParams.id;
 
+  return (
+    <SegmentPageServer segmentId={segmentId} />
+  );
+}
+
+// Server component for the full page
+async function SegmentPageServer({ segmentId }: { segmentId: string }) {
   // Get segment data to access symbol for breadcrumb
-  const segmentData = use(DatabaseService.getSegmentData(segmentId));
+  const segmentData = await DatabaseService.getSegmentData(segmentId);
   const symbol = segmentData?.symbol || '';
+
+  // Déterminer si l'élément actuel est classifié
+  const isCurrentClassified = segmentData && (
+    segmentData.schemaType !== 'UNCLASSIFIED' || 
+    (segmentData.patternPoint && segmentData.patternPoint !== 'UNCLASSIFIED' && segmentData.patternPoint !== 'unclassified' && segmentData.patternPoint !== 'null' && segmentData.patternPoint !== '')
+  );
+
+  // Trouver le prochain élément non classifié
+  const allResults = await DatabaseService.getAllAnalysisResults();
+  const unclassifiedResults = allResults.filter(r => 
+    r.schemaType === 'UNCLASSIFIED' && 
+    (r.patternPoint === null || r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified' || r.patternPoint === 'null' || r.patternPoint === '')
+  );
+  const nextUnclassifiedId = unclassifiedResults.length > 0 ? unclassifiedResults[0].id : null;
 
   return (
     <Navigation 
@@ -264,8 +356,33 @@ export default function SegmentPage({ params }: SegmentPageProps) {
       ]}
       pageTitle="Segment Analysis"
       pageSubtitle="Detailed price analysis and visualization"
-      pageActions={<BackButton href={`/analysis/${symbol}`} label="Back to Analysis" />}
+      pageActions={
+        <HStack gap={2}>
+          <BackButton href={`/analysis/${symbol}`} label="Back to Analysis" />
+          {nextUnclassifiedId && (
+            <Button
+              asChild
+              colorPalette={isCurrentClassified ? "green" : "blue"}
+              variant={isCurrentClassified ? "solid" : "outline"}
+              size="sm"
+            >
+              <Link href={`/segment/${encodeURIComponent(nextUnclassifiedId)}`}>
+                Next Analysis
+              </Link>
+            </Button>
+          )}
+        </HStack>
+      }
     >
+      <NextAnalysisHandler 
+        currentSegmentId={segmentId}
+        isClassified={isCurrentClassified || false}
+        nextUnclassifiedId={nextUnclassifiedId || undefined}
+      />
+      <ClassificationSuccessNotification 
+        isClassified={isCurrentClassified || false}
+        nextUnclassifiedId={nextUnclassifiedId || undefined}
+      />
       <SegmentDetailServer segmentId={segmentId} />
     </Navigation>
   );

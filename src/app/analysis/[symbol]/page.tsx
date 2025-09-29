@@ -63,6 +63,13 @@ async function AnalysisStatsServer({
   const patternYesCount = results.filter(r => r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== '').length;
   const patternNoCount = results.filter(r => r.patternPoint === null || r.patternPoint === '' || r.patternPoint === 'null').length;
   const patternUnclassifiedCount = results.filter(r => r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified').length;
+
+  // Nombre correctement classifié: schema classifié OU pattern référencé
+  const classifiedCount = results.filter(r => (
+    r.schemaType !== 'UNCLASSIFIED' || (
+      r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== ''
+    )
+  )).length;
   
   const hasExistingAnalysis = results.length > 0;
   
@@ -119,7 +126,7 @@ async function AnalysisStatsServer({
               {/* Encart Total et Classifiés */}
               <Card.Root>
                 <Card.Header>
-                  <Heading size="md" color="fg.default">Résumé</Heading>
+                  <Heading size="md" color="fg.default">Summary</Heading>
                 </Card.Header>
                 <Card.Body>
                   <VStack gap={3} align="stretch">
@@ -128,10 +135,8 @@ async function AnalysisStatsServer({
                       <Text fontSize="lg" fontWeight="bold" color="blue.600">{results.length}</Text>
                     </HStack>
                     <HStack justify="space-between">
-                      <Text fontSize="sm" color="fg.muted">Classifiés:</Text>
-                      <Text fontSize="lg" fontWeight="bold" color="green.600">
-                        {results.length - unclassifiedCount - patternUnclassifiedCount}
-                      </Text>
+                      <Text fontSize="sm" color="fg.muted">{symbol === 'AAPL' ? 'Classifiés:' : 'Classify:'}</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="green.600">{classifiedCount}</Text>
                     </HStack>
                   </VStack>
                 </Card.Body>
@@ -184,10 +189,10 @@ async function AnalysisStatsServer({
               </Card.Root>
             </Grid>
 
-            {/* Filtres à droite */}
+            {/* Filters on the right */}
             <Card.Root>
               <Card.Header>
-                <Heading size="md" color="fg.default">Filtres</Heading>
+                <Heading size="md" color="fg.default">Filters</Heading>
               </Card.Header>
               <Card.Body>
                 <AdvancedAnalysisFilter 

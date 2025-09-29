@@ -24,10 +24,16 @@ import { BarChart3, Calendar, Database } from 'lucide-react';
 import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
 import AddStockForm from '@/components/AddStockForm';
+import ClassificationStatus from '@/components/ClassificationStatus';
 
 // Server component for stock list
 async function StockListServer() {
   const stocks = await DatabaseService.getAllStockData();
+  const symbols = Array.from(new Set(stocks.map(s => s.symbol.toUpperCase())));
+  const [segmentCounts, datasetCounts] = await Promise.all([
+    DatabaseService.getSegmentCountsForSymbols(symbols),
+    DatabaseService.getDatasetCountsForSymbols(symbols),
+  ]);
 
   return (
     <VStack gap={6} align="stretch">
@@ -85,12 +91,18 @@ async function StockListServer() {
                     <HStack gap={4} justify="space-between" fontSize="sm">
                       <HStack gap={2}>
                         <Calendar size={14} color="var(--chakra-colors-gray-500)" />
-                        <Text color="fg.muted">{getDateRange(stock.data)}</Text>
+                        <Text color="fg.muted">{(datasetCounts[stock.symbol.toUpperCase()] ?? 1).toString()} {datasetCounts[stock.symbol.toUpperCase()] > 1 ? "Streams" : "Stream"}</Text>
                       </HStack>
                       <HStack gap={2}>
                         <Database size={14} color="var(--chakra-colors-gray-500)" />
                         <Text color="fg.muted">{stock.totalPoints.toLocaleString()} points</Text>
                       </HStack>
+                    </HStack>
+
+                    {/* Segments count under points, right-aligned */}
+                    <HStack gap={2} justify="flex-end" fontSize="sm">
+                      <BarChart3 size={14} color="var(--chakra-colors-gray-500)" />
+                      <Text color="fg.muted">{segmentCounts[stock.symbol.toUpperCase()] ?? 0} {segmentCounts[stock.symbol.toUpperCase()] > 1 ? "Segments" : "Segment"}</Text>
                     </HStack>
                     
                     <Box borderTop="1px" borderColor="border.default" />
@@ -158,6 +170,9 @@ export default function HomePage() {
       pageSubtitle="Manage your stock datasets and analyze market trends with professional tools"
     >
       <VStack gap={8} align="stretch">
+        {/* Classification Status */}
+        <ClassificationStatus />
+
         {/* Add New Stock Form */}
         <AddStockForm />
 
