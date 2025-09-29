@@ -217,6 +217,37 @@ export class DatabaseService {
     }
   }
 
+  static async updateAnalysisResult(
+    id: string, 
+    updateData: {
+      schemaType?: 'R' | 'V' | 'UNCLASSIFIED';
+      patternPoint?: string | null;
+    }
+  ): Promise<boolean> {
+    try {
+      const updateFields: any = {};
+      
+      if (updateData.schemaType !== undefined) {
+        updateFields.schemaType = schemaTypeSchema.parse(updateData.schemaType);
+      }
+      
+      if (updateData.patternPoint !== undefined) {
+        updateFields.patternPoint = updateData.patternPoint;
+      }
+      
+      const result = await this.db
+        .update(schema.analysisResults)
+        .set(updateFields)
+        .where(eq(schema.analysisResults.id, id))
+        .returning();
+      
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error updating analysis result:', error);
+      throw new Error('Failed to update analysis result');
+    }
+  }
+
   static async getSegmentData(segmentId: string): Promise<AnalysisResultWithChart | null> {
     try {
       // First, try to decode the URL segment ID
