@@ -146,8 +146,8 @@ export default function PatternClassificationForm({
               />
               <label htmlFor="pattern-yes">
                 <HStack gap={2}>
-                  <Badge colorPalette="green" variant="subtle" size="sm">Oui</Badge>
-                  <Text fontSize="sm" color="fg.default">Pattern détecté</Text>
+                  <Badge colorPalette="green" variant="subtle" size="sm">Yes</Badge>
+                  <Text fontSize="sm" color="fg.default">Pattern detected</Text>
                 </HStack>
               </label>
             </HStack>
@@ -163,8 +163,8 @@ export default function PatternClassificationForm({
               />
               <label htmlFor="pattern-no">
                 <HStack gap={2}>
-                  <Badge colorPalette="red" variant="subtle" size="sm">Non</Badge>
-                  <Text fontSize="sm" color="fg.default">Pas de pattern</Text>
+                  <Badge colorPalette="red" variant="subtle" size="sm">No</Badge>
+                  <Text fontSize="sm" color="fg.default">No pattern</Text>
                 </HStack>
               </label>
             </HStack>
@@ -180,8 +180,8 @@ export default function PatternClassificationForm({
               />
               <label htmlFor="pattern-unclassified">
                 <HStack gap={2}>
-                  <Badge colorPalette="gray" variant="subtle" size="sm">Non classifié</Badge>
-                  <Text fontSize="sm" color="fg.default">Pas encore analysé</Text>
+                  <Badge colorPalette="gray" variant="subtle" size="sm">UNCLASSIFIED</Badge>
+                  <Text fontSize="sm" color="fg.default">Not yet analyzed</Text>
                 </HStack>
               </label>
             </HStack>
@@ -199,7 +199,7 @@ export default function PatternClassificationForm({
               colorPalette="blue"
             >
               <Target size={16} style={{ marginRight: '8px' }} />
-              Sélectionner un point
+              Select a point
             </Button>
             {selectedPoint && (
               <Text fontSize="sm" color="#eab308" fontWeight="semibold">

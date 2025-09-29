@@ -8,9 +8,13 @@
 
 import { neon } from '@neondatabase/serverless';
 import { v4 as uuidv4 } from 'uuid';
+import { config } from 'dotenv';
+
+// Charger les variables d'environnement
+config({ path: '.env' });
 
 // Database connection
-const databaseUrl = process.env.DATABASE_URL 
+const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
@@ -69,12 +73,37 @@ export class StockAnalysisService {
   }
 
   /**
-   * Save stock data to database
+   * Extrait la date des données API (la plus récente)
+   */
+  private extractDateFromApiData(data: Record<string, unknown>): string {
+    const timestamps = Object.keys(data);
+    if (timestamps.length === 0) {
+      throw new Error('No timestamps found in API data');
+    }
+    
+    // Trier les timestamps pour trouver la plus récente
+    const sortedTimestamps = timestamps.sort();
+    const mostRecentTimestamp = sortedTimestamps[sortedTimestamps.length - 1];
+    
+    // Extraire la date du timestamp (format: "2025-01-23 16:00:00")
+    const date = new Date(mostRecentTimestamp).toISOString().split('T')[0];
+    
+    console.log(`📅 Date extraite des données API: ${date} (timestamp le plus récent: ${mostRecentTimestamp})`);
+    
+    return date;
+  }
+
+  /**
+   * Save stock data to database with correct date from API data
    */
   async saveStockData(symbol: string, data: Record<string, unknown>): Promise<string> {
     const totalPoints = Object.keys(data).length;
-    const date = new Date().toISOString().split('T')[0];
+    
+    // ✅ CORRECT : Extraire la date des données API
+    const date = this.extractDateFromApiData(data);
     const id = `${symbol.toUpperCase()}_${date}`;
+
+    console.log(`💾 Sauvegarde des données pour ${symbol} avec date: ${date}`);
 
     await sql`
       INSERT INTO stock_data (id, symbol, date, data, total_points)
@@ -222,7 +251,7 @@ export class StockAnalysisService {
    * 3. Apply plateau and constant derivative filtering
    * 4. Adjust point count to stay within 6-40 point range
    */
-  private processSegment(
+  protected processSegment(
     symbol: string, 
     date: string, 
     timestamps: string[], 

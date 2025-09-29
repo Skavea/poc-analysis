@@ -7,7 +7,7 @@
 
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { eq, and, desc, sql, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, lte, inArray } from 'drizzle-orm';
 import * as schema from './schema';
 import { 
   StockData, 
@@ -18,6 +18,9 @@ import {
   AnalysisResultWithChart,
   schemaTypeSchema
 } from './schema';
+
+// Type pour getAllStockData sans la colonne data (trop volumineuse)
+type StockDataSummary = Omit<StockData, 'data'>;
 
 // Environment validation function
 function validateEnvironment() {
@@ -91,10 +94,18 @@ export class DatabaseService {
     }
   }
 
-  static async getAllStockData(): Promise<StockData[]> {
+  static async getAllStockData(): Promise<StockDataSummary[]> {
     try {
       return await this.db
-        .select()
+        .select({
+          id: schema.stockData.id,
+          symbol: schema.stockData.symbol,
+          date: schema.stockData.date,
+          totalPoints: schema.stockData.totalPoints,
+          marketType: schema.stockData.marketType,
+          createdAt: schema.stockData.createdAt
+          // Exclure la colonne 'data' qui est trop volumineuse
+        })
         .from(schema.stockData)
         .orderBy(desc(schema.stockData.createdAt));
     } catch (error) {
@@ -170,6 +181,53 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching all analysis results:', error);
       throw new Error('Failed to fetch analysis results');
+    }
+  }
+
+  // Batch counters by symbol
+  static async getSegmentCountsForSymbols(symbols: string[]): Promise<Record<string, number>> {
+    if (symbols.length === 0) return {};
+    try {
+      const upper = symbols.map(s => s.toUpperCase());
+      const rows = await this.db
+        .select({
+          symbol: schema.analysisResults.symbol,
+          count: sql<number>`count(*)`,
+        })
+        .from(schema.analysisResults)
+        .where(inArray(schema.analysisResults.symbol, upper))
+        .groupBy(schema.analysisResults.symbol);
+      const map: Record<string, number> = {};
+      for (const row of rows as Array<{ symbol: string; count: number }>) {
+        map[row.symbol] = Number(row.count);
+      }
+      return map;
+    } catch (error) {
+      console.error('Error counting segments by symbol:', error);
+      throw new Error('Failed to count segments');
+    }
+  }
+
+  static async getDatasetCountsForSymbols(symbols: string[]): Promise<Record<string, number>> {
+    if (symbols.length === 0) return {};
+    try {
+      const upper = symbols.map(s => s.toUpperCase());
+      const rows = await this.db
+        .select({
+          symbol: schema.stockData.symbol,
+          count: sql<number>`count(*)`,
+        })
+        .from(schema.stockData)
+        .where(inArray(schema.stockData.symbol, upper))
+        .groupBy(schema.stockData.symbol);
+      const map: Record<string, number> = {};
+      for (const row of rows as Array<{ symbol: string; count: number }>) {
+        map[row.symbol] = Number(row.count);
+      }
+      return map;
+    } catch (error) {
+      console.error('Error counting datasets by symbol:', error);
+      throw new Error('Failed to count datasets');
     }
   }
 

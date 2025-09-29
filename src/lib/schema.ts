@@ -5,26 +5,33 @@
  * DrizzleORM schema definitions for type-safe database operations
  */
 
-import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, text } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, text, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-// Stock Data Table
+// Stock Data Table (avec market_type)
 export const stockData = pgTable('stock_data', {
-  id: varchar('id', { length: 255 }).primaryKey(),
+  id: varchar('id', { length: 255 }).primaryKey(), // "AAPL_2025-01-23", "BTC_2025-01-23"
   symbol: varchar('symbol', { length: 10 }).notNull(),
   date: varchar('date', { length: 10 }).notNull(),
   data: jsonb('data').notNull(),
   totalPoints: integer('total_points').notNull(),
+  marketType: varchar('market_type', { length: 20 }).default('STOCK').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  marketTypeCheck: check('stock_data_market_type_check', 
+    sql`${table.marketType} IN ('STOCK', 'CRYPTOCURRENCY', 'COMMODITY', 'INDEX')`),
+  symbolMarketDateUnique: unique('stock_data_symbol_market_date_unique')
+    .on(table.symbol, table.marketType, table.date),
+}));
 
-// Analysis Results Table
+// Analysis Results Table (avec référence vers stock_data)
 export const analysisResults = pgTable('analysis_results', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  symbol: varchar('symbol', { length: 10 }).notNull(),
-  date: varchar('date', { length: 10 }).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey(), // "AAPL_2025-01-23_abc123"
+  stockDataId: varchar('stock_data_id', { length: 255 }).notNull().references(() => stockData.id, { onDelete: 'cascade' }),
+  symbol: varchar('symbol', { length: 10 }).notNull(), // GARDÉ pour les requêtes
+  date: varchar('date', { length: 10 }).notNull(),     // GARDÉ pour les requêtes
   segmentStart: timestamp('segment_start', { withTimezone: true }).notNull(),
   segmentEnd: timestamp('segment_end', { withTimezone: true }).notNull(),
   pointCount: integer('point_count').notNull(),
@@ -101,6 +108,28 @@ export const selectChartImageSchema = createSelectSchema(chartImages);
 // Type exports for chart images
 export type ChartImage = typeof chartImages.$inferSelect;
 export type NewChartImage = typeof chartImages.$inferInsert;
+
+// Types pour les marchés
+export const marketTypeSchema = z.enum(['STOCK', 'CRYPTOCURRENCY', 'COMMODITY', 'INDEX']);
+export type MarketType = z.infer<typeof marketTypeSchema>;
+
+// Types avec relations
+export interface StockDataWithAnalysis extends StockData {
+  analysisResults: AnalysisResult[];
+}
+
+export interface AnalysisResultWithStockData extends AnalysisResult {
+  stockData: StockData;
+}
+
+// Types avec market_type pour les requêtes
+export interface StockDataWithMarket extends StockData {
+  marketType: MarketType;
+}
+
+export interface AnalysisResultWithMarket extends AnalysisResult {
+  marketType: MarketType;
+}
 
 // Validation schemas
 export const schemaTypeSchema = z.enum(['R', 'V', 'UNCLASSIFIED']);

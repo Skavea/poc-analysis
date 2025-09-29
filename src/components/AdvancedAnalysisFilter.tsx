@@ -111,10 +111,10 @@ export default function AdvancedAnalysisFilter({
       <HStack gap={4} align="center" justify="space-between">
         <HStack gap={2} align="center">
           <Filter size={16} color="var(--chakra-colors-gray-500)" />
-          <Text fontSize="sm" fontWeight="medium">Filtres actifs</Text>
+          <Text fontSize="sm" fontWeight="medium">Active filters</Text>
         </HStack>
         <Text fontSize="sm" color="fg.muted">
-          Résultats filtrés: {getFilteredCount()}
+          Filtered results: {getFilteredCount()}
         </Text>
       </HStack>
       
