@@ -16,6 +16,8 @@ import {
   NewAnalysisResult,
   ChartImage,
   AnalysisResultWithChart,
+  AnalysisResultsImage,
+  NewAnalysisResultsImage,
   schemaTypeSchema
 } from './schema';
 
@@ -480,6 +482,101 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching analysis stats:', error);
       throw new Error('Failed to fetch analysis stats');
+    }
+  }
+
+  // Analysis Results Images Operations
+  
+  /**
+   * Crée une nouvelle image pour un résultat d'analyse
+   */
+  static async createAnalysisResultImage(data: NewAnalysisResultsImage): Promise<AnalysisResultsImage> {
+    try {
+      const [result] = await this.db
+        .insert(schema.analysisResultsImages)
+        .values(data)
+        .returning();
+      
+      if (!result) {
+        throw new Error('Failed to create analysis result image');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error creating analysis result image:', error);
+      throw new Error('Failed to create analysis result image');
+    }
+  }
+
+  /**
+   * Récupère l'image associée à un résultat d'analyse
+   */
+  static async getAnalysisResultImage(analysisResultId: string): Promise<AnalysisResultsImage | null> {
+    try {
+      const [result] = await this.db
+        .select()
+        .from(schema.analysisResultsImages)
+        .where(eq(schema.analysisResultsImages.analysisResultId, analysisResultId))
+        .limit(1);
+      
+      return result || null;
+    } catch (error) {
+      console.error('Error fetching analysis result image:', error);
+      throw new Error('Failed to fetch analysis result image');
+    }
+  }
+
+  /**
+   * Récupère une image par son ID
+   */
+  static async getAnalysisResultImageById(id: string): Promise<AnalysisResultsImage | null> {
+    try {
+      const [result] = await this.db
+        .select()
+        .from(schema.analysisResultsImages)
+        .where(eq(schema.analysisResultsImages.id, id))
+        .limit(1);
+      
+      return result || null;
+    } catch (error) {
+      console.error('Error fetching analysis result image by id:', error);
+      throw new Error('Failed to fetch analysis result image');
+    }
+  }
+
+  /**
+   * Supprime l'image associée à un résultat d'analyse
+   */
+  static async deleteAnalysisResultImage(id: string): Promise<void> {
+    try {
+      await this.db
+        .delete(schema.analysisResultsImages)
+        .where(eq(schema.analysisResultsImages.id, id));
+    } catch (error) {
+      console.error('Error deleting analysis result image:', error);
+      throw new Error('Failed to delete analysis result image');
+    }
+  }
+
+  /**
+   * Récupère tous les segments qui n'ont pas d'image associée
+   */
+  static async getSegmentsWithoutImage(): Promise<AnalysisResult[]> {
+    try {
+      const results = await this.db
+        .select()
+        .from(schema.analysisResults)
+        .leftJoin(
+          schema.analysisResultsImages,
+          eq(schema.analysisResults.id, schema.analysisResultsImages.analysisResultId)
+        )
+        .where(sql`${schema.analysisResultsImages.id} IS NULL`)
+        .orderBy(desc(schema.analysisResults.createdAt));
+      
+      return results.map(r => r.analysis_results);
+    } catch (error) {
+      console.error('Error fetching segments without image:', error);
+      throw new Error('Failed to fetch segments without image');
     }
   }
 

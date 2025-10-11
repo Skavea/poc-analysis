@@ -18,6 +18,7 @@ import BackButton from '@/components/BackButton';
 import NextAnalysisHandler from '@/components/NextAnalysisHandler';
 import ClassificationSuccessNotification from '@/components/ClassificationSuccessNotification';
 import ExportChartButton from '@/components/ExportChartButton';
+import SegmentGeneratedImage from '@/components/SegmentGeneratedImage';
 import {
   Box,
   VStack,
@@ -60,6 +61,9 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   }
 
   const { pointsData, ...analysis } = segmentData;
+  
+  // Récupérer l'image générée pour ce segment
+  const imageData = await DatabaseService.getAnalysisResultImage(segmentId);
   
   // Déterminer si l'élément est classifié
   const isClassified = analysis.schemaType !== 'UNCLASSIFIED' || 
@@ -124,6 +128,12 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
             </Box>
           </Card.Body>
         </Card.Root>
+        
+        {/* Image générée automatiquement */}
+        <SegmentGeneratedImage 
+          imageData={imageData?.imgData || null} 
+          segmentId={segmentId} 
+        />
       </GridItem>
 
       {/* Right Column - Analysis Data */}

@@ -106,8 +106,8 @@ export class StockAnalysisService {
     console.log(`💾 Sauvegarde des données pour ${symbol} avec date: ${date}`);
 
     await sql`
-      INSERT INTO stock_data (id, symbol, date, data, total_points)
-      VALUES (${id}, ${symbol.toUpperCase()}, ${date}, ${JSON.stringify(data)}, ${totalPoints})
+      INSERT INTO stock_data (id, symbol, date, data, total_points, market_type)
+      VALUES (${id}, ${symbol.toUpperCase()}, ${date}, ${JSON.stringify(data)}, ${totalPoints}, 'STOCK')
       ON CONFLICT (id) DO UPDATE SET
         data = EXCLUDED.data,
         total_points = EXCLUDED.total_points,
@@ -468,19 +468,25 @@ export class StockAnalysisService {
     originalPointCount: number;
     pointsInRegion: number;
   }>): Promise<number> {
+    const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
     
     for (const segment of segments) {
       try {
+        // Construire le stockDataId à partir du symbol et date du segment
+        const stockDataId = `${segment.symbol}_${segment.date}`;
+        
+        // Sauvegarder le segment
         await sql`
           INSERT INTO analysis_results (
-            id, symbol, date, segment_start, segment_end, point_count,
+            id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
             x0, min_price, max_price, average_price, trend_direction, 
             points_data, original_point_count, points_in_region, schema_type
           ) VALUES (
-            ${segment.id},
-            ${segment.symbol},
-            ${segment.date},
+            ${segment.id}, -- "AAPL_2025-01-23_abc123"
+            ${stockDataId}, -- "AAPL_2025-01-23"
+            ${segment.symbol},      -- "AAPL" - GARDÉ pour les requêtes
+            ${segment.date},        -- "2025-01-23" - GARDÉ pour les requêtes
             ${segment.segmentStart},
             ${segment.segmentEnd},
             ${segment.pointCount},
@@ -496,6 +502,39 @@ export class StockAnalysisService {
           )
           ON CONFLICT (id) DO NOTHING
         `;
+        
+        // Générer et sauvegarder l'image du graphique
+        try {
+          const imageData = createAnalysisResultImage(
+            segment.id,
+            {
+              id: segment.id,
+              pointsData: segment.pointsData,
+              minPrice: segment.minPrice,
+              maxPrice: segment.maxPrice,
+              averagePrice: segment.averagePrice,
+              x0: segment.x0,
+              patternPoint: null
+            },
+            800,
+            400
+          );
+          
+          await sql`
+            INSERT INTO analysis_results_images (
+              id, analysis_result_id, img_data
+            ) VALUES (
+              ${imageData.id},
+              ${imageData.analysisResultId},
+              ${imageData.imgData}
+            )
+            ON CONFLICT (id) DO NOTHING
+          `;
+        } catch (imageError) {
+          console.error(`Error generating image for segment ${segment.id}:`, imageError);
+          // On continue même si l'image n'a pas pu être générée
+        }
+        
         savedCount++;
       } catch (error) {
         console.error(`Error saving segment ${segment.id}:`, error);

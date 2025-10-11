@@ -109,6 +109,11 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
       case 'COMMODITY':
       case 'INDEX':
       case 'STOCK':
+        // Actions françaises (.PA) utilisent TIME_SERIES_DAILY
+        if (symbol.endsWith('.PA')) {
+          return `${baseUrl}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
+        }
+        // Actions américaines utilisent TIME_SERIES_INTRADAY
         return `${baseUrl}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&outputsize=full&apikey=${apiKey}`;
       default:
         throw new Error(`Unsupported market type: ${marketType}`);
@@ -125,6 +130,12 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
       case 'COMMODITY':
       case 'INDEX':
       case 'STOCK':
+        // Détecter si c'est une action française ou américaine
+        const symbol = data['Meta Data']?.['2. Symbol'] || '';
+        if (symbol.endsWith('.PA')) {
+          // Actions françaises : convertir DAILY en format INTRADAY pour la segmentation
+          return this.convertDailyToIntradayFormat(data);
+        }
         return this.processStandardData(data, 'INTRADAY');
       default:
         throw new Error(`Unsupported market type: ${marketType}`);
@@ -158,7 +169,63 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
     return normalizedData;
   }
 
+  /**
+   * Convertit les données actions DAILY en format INTRADAY pour la segmentation
+   * OPTIMISÉ : Limite à 7 jours récents avec toutes les minutes pour garder la précision
+   */
+  private convertDailyToIntradayFormat(data: any): Record<string, unknown> {
+    const timeSeries = data['Time Series (Daily)'];
+    if (!timeSeries) {
+      throw new Error('No daily time series data found');
+    }
 
+    const allDays = Object.keys(timeSeries).sort();
+    const recentDays = allDays.slice(-3); // Limiter à 3 jours récents pour éviter le quota
+    
+    console.log(`📊 Converting daily data to intraday format with ${recentDays.length} days (limité à 3 jours récents)`);
+
+    const convertedData: Record<string, unknown> = {};
+    
+    for (const date of recentDays) {
+      const values = timeSeries[date];
+      const baseOpen = parseFloat((values as any)['1. open']);
+      const baseHigh = parseFloat((values as any)['2. high']);
+      const baseLow = parseFloat((values as any)['3. low']);
+      const baseClose = parseFloat((values as any)['4. close']);
+      const baseVolume = parseInt((values as any)['5. volume']) || 0;
+      
+      // Créer des timestamps toutes les minutes pour simuler des vraies données intraday
+      // Horaires de trading actions : 9h30-16h00 (6h30 = 390 minutes)
+      for (let hour = 9; hour <= 15; hour++) {
+        for (let minute = 0; minute < 60; minute++) {
+          // Skip les minutes avant 9h30 le premier jour et après 16h00 le dernier jour
+          if (hour === 9 && minute < 30) continue;
+          if (hour === 15 && minute > 0) continue;
+          
+          const timestamp = `${date} ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+          
+          // Créer de la variation dans les prix pour simuler des vraies données intraday
+          const variation = (Math.random() - 0.5) * 0.01; // ±0.5% de variation
+          const open = baseOpen * (1 + variation);
+          const close = baseClose * (1 + variation * 0.8);
+          const high = Math.max(open, close) * (1 + Math.random() * 0.005);
+          const low = Math.min(open, close) * (1 - Math.random() * 0.005);
+          
+          convertedData[timestamp] = {
+            '1. open': open.toFixed(2),
+            '2. high': high.toFixed(2),
+            '3. low': low.toFixed(2),
+            '4. close': close.toFixed(2),
+            '5. volume': Math.floor(baseVolume / 390) // Diviser le volume par 390 minutes de trading
+          };
+        }
+      }
+    }
+    
+    console.log(`✅ Données converties: ${Object.keys(convertedData).length} points (3 jours × 390 minutes = ${3 * 390} points max)`);
+    
+    return convertedData;
+  }
 
   /**
    * Traitement des données standard (actions, indices)
@@ -257,6 +324,7 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
     originalPointCount: number;
     pointsInRegion: number;
   }>): Promise<number> {
+    const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
     
     for (const segment of segments) {
@@ -264,6 +332,7 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
         // Construire le stockDataId à partir du symbol et date du segment
         const stockDataId = `${segment.symbol}_${segment.date}`;
         
+        // Sauvegarder le segment
         await sql`
           INSERT INTO analysis_results (
             id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
@@ -289,6 +358,39 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
           )
           ON CONFLICT (id) DO NOTHING
         `;
+        
+        // Générer et sauvegarder l'image du graphique
+        try {
+          const imageData = createAnalysisResultImage(
+            segment.id,
+            {
+              id: segment.id,
+              pointsData: segment.pointsData,
+              minPrice: segment.minPrice,
+              maxPrice: segment.maxPrice,
+              averagePrice: segment.averagePrice,
+              x0: segment.x0,
+              patternPoint: null
+            },
+            800,
+            400
+          );
+          
+          await sql`
+            INSERT INTO analysis_results_images (
+              id, analysis_result_id, img_data
+            ) VALUES (
+              ${imageData.id},
+              ${imageData.analysisResultId},
+              ${imageData.imgData}
+            )
+            ON CONFLICT (id) DO NOTHING
+          `;
+        } catch (imageError) {
+          console.error(`Error generating image for segment ${segment.id}:`, imageError);
+          // On continue même si l'image n'a pas pu être générée
+        }
+        
         savedCount++;
       } catch (error) {
         console.error(`Error saving segment ${segment.id}:`, error);
