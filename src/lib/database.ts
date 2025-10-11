@@ -74,17 +74,30 @@ export class DatabaseService {
 
   /**
    * Save stock dataset
+   * Génère automatiquement l'id à partir du symbol et de la date
    */
   static async saveStockDataset(data: {
     symbol: string;
     date: string;
     data: Record<string, unknown>;
     total_points: number;
+    market_type?: 'STOCK' | 'CRYPTOCURRENCY' | 'COMMODITY' | 'INDEX';
   }): Promise<void> {
+    // Générer l'id au format "SYMBOL_DATE"
+    const id = `${data.symbol.toUpperCase()}_${data.date}`;
+    const marketType = data.market_type || 'STOCK';
+    
     await sql`
-      INSERT INTO stock_data (symbol, date, data, total_points)
-      VALUES (${data.symbol}, ${data.date}, ${JSON.stringify(data.data)}, ${data.total_points})
-      ON CONFLICT (symbol, date) DO UPDATE SET
+      INSERT INTO stock_data (id, symbol, date, data, total_points, market_type)
+      VALUES (
+        ${id}, 
+        ${data.symbol.toUpperCase()}, 
+        ${data.date}, 
+        ${JSON.stringify(data.data)}, 
+        ${data.total_points}, 
+        ${marketType}
+      )
+      ON CONFLICT (id) DO UPDATE SET
         data = EXCLUDED.data,
         total_points = EXCLUDED.total_points,
         created_at = CURRENT_TIMESTAMP
@@ -134,6 +147,7 @@ export class DatabaseService {
 
   /**
    * Save analysis result
+   * Construit automatiquement le stock_data_id à partir du symbol et de la date
    */
   static async saveAnalysisResult(data: {
     id: string;
@@ -156,13 +170,18 @@ export class DatabaseService {
       volume: number;
     }>;
   }): Promise<void> {
+    // Construire le stockDataId à partir du symbol et date
+    // S'assure que le symbol est en majuscules pour correspondre à l'id de stock_data
+    const stockDataId = `${data.symbol.toUpperCase()}_${data.date}`;
+    
     await sql`
       INSERT INTO analysis_results (
-        id, symbol, date, segment_start, segment_end, point_count,
-        x0, min_price, max_price, average_price, trend_direction, points_data
+        id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
+        x0, min_price, max_price, average_price, trend_direction, points_data, schema_type
       ) VALUES (
         ${data.id},
-        ${data.symbol},
+        ${stockDataId},
+        ${data.symbol.toUpperCase()},
         ${data.date},
         ${data.segment_start},
         ${data.segment_end},
@@ -172,7 +191,8 @@ export class DatabaseService {
         ${data.max_price},
         ${data.average_price},
         ${data.trend_direction},
-        ${JSON.stringify(data.points_data)}
+        ${JSON.stringify(data.points_data)},
+        'UNCLASSIFIED'
       )
       ON CONFLICT (id) DO NOTHING
     `;

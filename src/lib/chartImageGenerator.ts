@@ -71,7 +71,7 @@ function generateSVGChart(
       .label-bold { font-family: Arial, sans-serif; font-size: 11px; fill: #333; font-weight: 600; }
       .data-point { fill: #94a3b8; stroke: #64748b; stroke-width: 1; }
       .last-point { fill: #ef4444; stroke: #dc2626; stroke-width: 2; }
-      .pattern-point { fill: #eab308; stroke: #ca8a04; stroke-width: 3; }
+      .pattern-point { fill: #10b981; stroke: #059669; stroke-width: 3; }
     </style>
   `;
   

@@ -56,10 +56,12 @@ async function resetDatabase() {
 
     console.log('🔄 Resetting database...');
     
-    // Drop existing tables
+    // Drop existing tables (cascade pour supprimer les tables liées)
     console.log('🗑️ Dropping existing tables...');
-    await sql`DROP TABLE IF EXISTS analysis_results`;
-    await sql`DROP TABLE IF EXISTS stock_data`;
+    await sql`DROP TABLE IF EXISTS analysis_results_images CASCADE`;
+    await sql`DROP TABLE IF EXISTS chart_images CASCADE`;
+    await sql`DROP TABLE IF EXISTS analysis_results CASCADE`;
+    await sql`DROP TABLE IF EXISTS stock_data CASCADE`;
     
     // Create tables
     console.log('🏗️ Creating tables...');
@@ -67,7 +69,7 @@ async function resetDatabase() {
     // Enable UUID extension
     await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
     
-    // Create stock_data table
+    // Create stock_data table (avec market_type)
     await sql`
       CREATE TABLE stock_data (
         id VARCHAR(255) PRIMARY KEY,
@@ -75,17 +77,20 @@ async function resetDatabase() {
         date VARCHAR(10) NOT NULL,
         data JSONB NOT NULL,
         total_points INTEGER NOT NULL,
+        market_type VARCHAR(20) DEFAULT 'STOCK' NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
         
         CONSTRAINT positive_total_points CHECK (total_points > 0),
-        UNIQUE(symbol, date)
+        CONSTRAINT stock_data_market_type_check CHECK (market_type IN ('STOCK', 'CRYPTOCURRENCY', 'COMMODITY', 'INDEX')),
+        CONSTRAINT stock_data_symbol_market_date_unique UNIQUE (symbol, market_type, date)
       )
     `;
     
-    // Create analysis_results table
+    // Create analysis_results table (avec stock_data_id et pattern_point)
     await sql`
       CREATE TABLE analysis_results (
         id VARCHAR(255) PRIMARY KEY,
+        stock_data_id VARCHAR(255) NOT NULL REFERENCES stock_data(id) ON DELETE CASCADE,
         symbol VARCHAR(10) NOT NULL,
         date VARCHAR(10) NOT NULL,
         segment_start TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -97,6 +102,7 @@ async function resetDatabase() {
         average_price DECIMAL(12,4) NOT NULL,
         trend_direction VARCHAR(10) NOT NULL CHECK (trend_direction IN ('UP', 'DOWN')),
         schema_type VARCHAR(20) DEFAULT 'UNCLASSIFIED' NOT NULL CHECK (schema_type IN ('R', 'V', 'UNCLASSIFIED')),
+        pattern_point VARCHAR(255),
         points_data JSONB,
         original_point_count INTEGER,
         points_in_region INTEGER,
@@ -108,6 +114,28 @@ async function resetDatabase() {
       )
     `;
     
+    // Create chart_images table (pour stocker les graphiques SVG)
+    await sql`
+      CREATE TABLE chart_images (
+        id VARCHAR(255) PRIMARY KEY,
+        segment_id VARCHAR(255) NOT NULL REFERENCES analysis_results(id) ON DELETE CASCADE,
+        svg_content TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        format VARCHAR(10) NOT NULL DEFAULT 'svg',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )
+    `;
+    
+    // Create analysis_results_images table (pour stocker les images base64)
+    await sql`
+      CREATE TABLE analysis_results_images (
+        id VARCHAR(255) PRIMARY KEY UNIQUE,
+        analysis_result_id VARCHAR(255) NOT NULL REFERENCES analysis_results(id) ON DELETE CASCADE,
+        img_data TEXT NOT NULL
+      )
+    `;
+    
     // Create indexes
     console.log('📇 Creating indexes...');
     
@@ -115,12 +143,15 @@ async function resetDatabase() {
     await sql`CREATE INDEX idx_stock_data_symbol ON stock_data(symbol)`;
     await sql`CREATE INDEX idx_stock_data_date ON stock_data(date)`;
     await sql`CREATE INDEX idx_stock_data_created_at ON stock_data(created_at)`;
+    await sql`CREATE INDEX idx_stock_data_market_type ON stock_data(market_type)`;
+    await sql`CREATE INDEX idx_stock_data_symbol_market ON stock_data(symbol, market_type)`;
     
     // Analysis results indexes
     await sql`CREATE INDEX idx_analysis_results_symbol ON analysis_results(symbol)`;
     await sql`CREATE INDEX idx_analysis_results_date ON analysis_results(date)`;
     await sql`CREATE INDEX idx_analysis_results_trend ON analysis_results(trend_direction)`;
     await sql`CREATE INDEX idx_analysis_results_schema_type ON analysis_results(schema_type)`;
+    await sql`CREATE INDEX idx_analysis_results_stock_data_id ON analysis_results(stock_data_id)`;
     await sql`CREATE INDEX idx_analysis_results_created_at ON analysis_results(created_at)`;
     
     console.log('✅ Database reset complete!');
