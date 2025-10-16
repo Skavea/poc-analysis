@@ -180,9 +180,9 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
     }
 
     const allDays = Object.keys(timeSeries).sort();
-    const recentDays = allDays.slice(-3); // Limiter à 3 jours récents pour éviter le quota
+    const recentDays = allDays.slice(-15); // Limiter à 15 jours récents pour les marchés européens
     
-    console.log(`📊 Converting daily data to intraday format with ${recentDays.length} days (limité à 3 jours récents)`);
+    console.log(`📊 Converting daily data to intraday format with ${recentDays.length} days (limité à 15 jours récents)`);
 
     const convertedData: Record<string, unknown> = {};
     
@@ -222,7 +222,7 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
       }
     }
     
-    console.log(`✅ Données converties: ${Object.keys(convertedData).length} points (3 jours × 390 minutes = ${3 * 390} points max)`);
+    console.log(`✅ Données converties: ${Object.keys(convertedData).length} points (15 jours × 390 minutes = ${15 * 390} points max)`);
     
     return convertedData;
   }
