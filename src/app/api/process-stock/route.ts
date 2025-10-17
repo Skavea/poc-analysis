@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { StockAnalysisService } from '@/lib/stockAnalysisService';
+import { MultiMarketAnalysisService } from '@/lib/multiMarketAnalysisService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,8 +38,35 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const service = StockAnalysisService.getInstance();
-    const result = await service.processStock(symbol);
+    // Détecter le type de marché et utiliser le bon service
+    let result;
+    
+    if (symbol.endsWith('.PA')) {
+      // Actions françaises : utiliser MultiMarketAnalysisService
+      console.log(`🇫🇷 Traitement d'une action française: ${symbol}`);
+      const multiService = new MultiMarketAnalysisService();
+      const multiResult = await multiService.processMarketAsset(symbol, 'STOCK');
+      result = {
+        success: multiResult.success,
+        message: multiResult.message,
+        segmentsCreated: multiResult.segmentsCreated
+      };
+    } else if (symbol === 'BTC' || symbol === 'ETH') {
+      // Cryptomonnaies : utiliser MultiMarketAnalysisService
+      console.log(`₿ Traitement d'une cryptomonnaie: ${symbol}`);
+      const multiService = new MultiMarketAnalysisService();
+      const multiResult = await multiService.processMarketAsset(symbol, 'CRYPTOCURRENCY');
+      result = {
+        success: multiResult.success,
+        message: multiResult.message,
+        segmentsCreated: multiResult.segmentsCreated
+      };
+    } else {
+      // Actions américaines : utiliser StockAnalysisService
+      console.log(`🇺🇸 Traitement d'une action américaine: ${symbol}`);
+      const service = StockAnalysisService.getInstance();
+      result = await service.processStock(symbol);
+    }
 
     return NextResponse.json(result);
   } catch (error) {

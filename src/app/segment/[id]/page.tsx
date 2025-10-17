@@ -18,6 +18,7 @@ import BackButton from '@/components/BackButton';
 import NextAnalysisHandler from '@/components/NextAnalysisHandler';
 import ClassificationSuccessNotification from '@/components/ClassificationSuccessNotification';
 import ExportChartButton from '@/components/ExportChartButton';
+import SegmentGeneratedImage from '@/components/SegmentGeneratedImage';
 import {
   Box,
   VStack,
@@ -35,6 +36,7 @@ import Link from 'next/link';
 
 interface SegmentPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ stream?: string }>;
 }
 
 // Server component for segment data
@@ -60,6 +62,9 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   }
 
   const { pointsData, ...analysis } = segmentData;
+  
+  // Récupérer l'image générée pour ce segment
+  const imageData = await DatabaseService.getAnalysisResultImage(segmentId);
   
   // Déterminer si l'élément est classifié
   const isClassified = analysis.schemaType !== 'UNCLASSIFIED' || 
@@ -124,6 +129,12 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
             </Box>
           </Card.Body>
         </Card.Root>
+        
+        {/* Image générée automatiquement */}
+        <SegmentGeneratedImage 
+          imageData={imageData?.imgData || null} 
+          segmentId={segmentId} 
+        />
       </GridItem>
 
       {/* Right Column - Analysis Data */}
@@ -319,17 +330,19 @@ function getTrendIcon(trend: string) {
 }
 
 // Main page component
-export default function SegmentPage({ params }: SegmentPageProps) {
+export default function SegmentPage({ params, searchParams }: SegmentPageProps) {
   const resolvedParams = use(params);
+  const resolvedSearchParams = use(searchParams);
   const segmentId = resolvedParams.id;
+  const streamId = resolvedSearchParams.stream;
 
   return (
-    <SegmentPageServer segmentId={segmentId} />
+    <SegmentPageServer segmentId={segmentId} streamId={streamId} />
   );
 }
 
 // Server component for the full page
-async function SegmentPageServer({ segmentId }: { segmentId: string }) {
+async function SegmentPageServer({ segmentId, streamId }: { segmentId: string; streamId?: string }) {
   // Get segment data to access symbol for breadcrumb
   const segmentData = await DatabaseService.getSegmentData(segmentId);
   const symbol = segmentData?.symbol || '';
@@ -348,17 +361,29 @@ async function SegmentPageServer({ segmentId }: { segmentId: string }) {
   );
   const nextUnclassifiedId = unclassifiedResults.length > 0 ? unclassifiedResults[0].id : null;
 
+  // Déterminer les breadcrumbs selon le contexte (stream ou non)
+  const breadcrumbs = streamId 
+    ? [
+        { label: `${symbol} Streams`, href: `/streams/${symbol}` },
+        { label: `Analysis: ${symbol}`, href: `/analysis/${symbol}?stream=${streamId}` },
+        { label: 'Segment Details' }
+      ]
+    : [
+        { label: `Analysis: ${symbol}`, href: `/analysis/${symbol}` },
+        { label: 'Segment Details' }
+      ];
+
+  // URL de retour selon le contexte
+  const backUrl = streamId ? `/analysis/${symbol}?stream=${streamId}` : `/analysis/${symbol}`;
+
   return (
     <Navigation 
-      breadcrumbs={[
-        { label: 'Analysis', href: `/analysis/${symbol}` },
-        { label: 'Segment Details' }
-      ]}
+      breadcrumbs={breadcrumbs}
       pageTitle="Segment Analysis"
       pageSubtitle="Detailed price analysis and visualization"
       pageActions={
         <HStack gap={2}>
-          <BackButton href={`/analysis/${symbol}`} label="Back to Analysis" />
+          <BackButton href={backUrl} label="Back to Analysis" />
           {nextUnclassifiedId && (
             <Button
               asChild
@@ -366,7 +391,7 @@ async function SegmentPageServer({ segmentId }: { segmentId: string }) {
               variant={isCurrentClassified ? "solid" : "outline"}
               size="sm"
             >
-              <Link href={`/segment/${encodeURIComponent(nextUnclassifiedId)}`}>
+              <Link href={`/segment/${encodeURIComponent(nextUnclassifiedId)}${streamId ? `?stream=${streamId}` : ''}`}>
                 Next Analysis
               </Link>
             </Button>

@@ -21,6 +21,7 @@ import {
 } from "@chakra-ui/react";
 import { BarChart3, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import RegenerateImagesButton from '@/components/RegenerateImagesButton';
 
 interface ClassificationStats {
   totalClassified: number;
@@ -163,6 +164,18 @@ export default async function ClassificationStatus() {
                     </Link>
                   </Button>
                 )}
+                <Button
+                  asChild
+                  variant="outline"
+                  size="md"
+                  w="full"
+                >
+                  <Link href={`/analysis/all`}>
+                    <BarChart3 size={18} style={{ marginRight: '8px' }} />
+                    All segments
+                  </Link>
+                </Button>
+                <RegenerateImagesButton />
               </VStack>
             </Card.Body>
           </Card.Root>

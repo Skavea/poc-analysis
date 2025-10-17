@@ -109,6 +109,23 @@ export const selectChartImageSchema = createSelectSchema(chartImages);
 export type ChartImage = typeof chartImages.$inferSelect;
 export type NewChartImage = typeof chartImages.$inferInsert;
 
+// Analysis Results Images Table - Stocke les images base64 des graphiques
+export const analysisResultsImages = pgTable('analysis_results_images', {
+  id: varchar('id', { length: 255 }).primaryKey().unique(),
+  analysisResultId: varchar('analysis_result_id', { length: 255 })
+    .notNull()
+    .references(() => analysisResults.id, { onDelete: 'cascade' }),
+  imgData: text('img_data').notNull(), // Image en base64
+});
+
+// Zod schemas for validation
+export const insertAnalysisResultsImageSchema = createInsertSchema(analysisResultsImages);
+export const selectAnalysisResultsImageSchema = createSelectSchema(analysisResultsImages);
+
+// Type exports for analysis results images
+export type AnalysisResultsImage = typeof analysisResultsImages.$inferSelect;
+export type NewAnalysisResultsImage = typeof analysisResultsImages.$inferInsert;
+
 // Types pour les marchés
 export const marketTypeSchema = z.enum(['STOCK', 'CRYPTOCURRENCY', 'COMMODITY', 'INDEX']);
 export type MarketType = z.infer<typeof marketTypeSchema>;

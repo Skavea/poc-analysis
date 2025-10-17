@@ -16,7 +16,7 @@
     "regenerate:all": "tsx scripts/regenerate-all-markets.ts",
     "add:new-markets": "tsx scripts/add-new-markets.ts",
     "test:single": "tsx scripts/test-single-market.ts",
-    "test:problematic": "tsx scripts/test-problematic-markets.ts"
+    "generate:images": "tsx scripts/generate-segment-images.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.27.0",

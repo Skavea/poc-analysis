@@ -114,9 +114,9 @@ async function StockListServer() {
                       size="md"
                       w="full"
                     >
-                      <Link href={`/analysis/${stock.symbol}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Link href={`/streams/${stock.symbol}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <BarChart3 size={18} style={{ marginRight: '8px' }} />
-                        View Analysis
+                        Select Stream
                       </Link>
                     </Button>
                   </VStack>

@@ -125,7 +125,7 @@ export default function AddStockForm() {
             </Field.Root>
             
             <Text fontSize="xs" color="fg.muted">
-              💡 Tip: Use standard stock symbols like AAPL, GOOGL, MSFT, etc.
+              💡 Tip: Actions américaines (AAPL, GOOGL), françaises (HO.PA, MC.PA), crypto (BTC, ETH)
             </Text>
           </VStack>
         </form>
