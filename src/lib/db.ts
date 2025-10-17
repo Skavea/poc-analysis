@@ -20,6 +20,7 @@ import {
   NewAnalysisResultsImage,
   schemaTypeSchema
 } from './schema';
+import { createAnalysisResultImage } from './chartImageGenerator';
 
 // Type pour getAllStockData sans la colonne data (trop volumineuse)
 type StockDataSummary = Omit<StockData, 'data'>;
@@ -51,6 +52,44 @@ export function getDatabase() {
   
   // Return the global connection
   return global._drizzleDb;
+}
+
+// Utility function pour extraire l'intervalle de dates
+function getDateRangeFromStreamData(data: Record<string, unknown>): string {
+  if (!data || typeof data !== 'object') return 'N/A';
+  
+  const timestamps = Object.keys(data).filter(key => 
+    key.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+  );
+  
+  if (timestamps.length === 0) return 'N/A';
+  
+  const sorted = timestamps.sort();
+  const startDate = sorted[0].split(' ')[0];
+  const endDate = sorted[sorted.length - 1].split(' ')[0];
+  
+  // Si c'est le même jour, afficher seulement la date
+  if (startDate === endDate) {
+    return new Date(startDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
+  
+  // Si c'est des jours différents, afficher la plage
+  const start = new Date(startDate).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+  const end = new Date(endDate).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+  
+  return `${start} - ${end}`;
 }
 
 // Database service class with proper error handling
@@ -174,6 +213,20 @@ export class DatabaseService {
     }
   }
 
+  // Nouvelle méthode pour récupérer les segments d'un stream spécifique
+  static async getAnalysisResultsByStreamId(stockDataId: string): Promise<AnalysisResult[]> {
+    try {
+      return await this.db
+        .select()
+        .from(schema.analysisResults)
+        .where(eq(schema.analysisResults.stockDataId, stockDataId))
+        .orderBy(desc(schema.analysisResults.schemaType), desc(schema.analysisResults.createdAt));
+    } catch (error) {
+      console.error('Error fetching analysis results by stream ID:', error);
+      throw new Error('Failed to fetch analysis results by stream ID');
+    }
+  }
+
   static async getAllAnalysisResults(): Promise<AnalysisResult[]> {
     try {
       return await this.db
@@ -233,6 +286,72 @@ export class DatabaseService {
     }
   }
 
+  // Nouvelle méthode pour récupérer le nombre de segments par stream spécifique
+  static async getSegmentCountsForStreams(streamIds: string[]): Promise<Record<string, number>> {
+    if (streamIds.length === 0) return {};
+    try {
+      const rows = await this.db
+        .select({
+          stockDataId: schema.analysisResults.stockDataId,
+          count: sql<number>`count(*)`,
+        })
+        .from(schema.analysisResults)
+        .where(inArray(schema.analysisResults.stockDataId, streamIds))
+        .groupBy(schema.analysisResults.stockDataId);
+      const map: Record<string, number> = {};
+      for (const row of rows as Array<{ stockDataId: string; count: number }>) {
+        map[row.stockDataId] = Number(row.count);
+      }
+      return map;
+    } catch (error) {
+      console.error('Error counting segments by stream:', error);
+      throw new Error('Failed to count segments by stream');
+    }
+  }
+
+  // Nouvelle méthode pour récupérer les streams avec leurs données pour calculer les intervalles de dates
+  static async getStreamsWithDateRanges(symbol: string): Promise<Array<{
+    id: string;
+    symbol: string;
+    date: string;
+    totalPoints: number;
+    marketType: string;
+    createdAt: Date;
+    dateRange: string;
+  }>> {
+    try {
+      const streams = await this.db
+        .select({
+          id: schema.stockData.id,
+          symbol: schema.stockData.symbol,
+          date: schema.stockData.date,
+          totalPoints: schema.stockData.totalPoints,
+          marketType: schema.stockData.marketType,
+          createdAt: schema.stockData.createdAt,
+          data: schema.stockData.data
+        })
+        .from(schema.stockData)
+        .where(eq(schema.stockData.symbol, symbol.toUpperCase()))
+        .orderBy(desc(schema.stockData.createdAt));
+
+      return streams.map(stream => {
+        const dateRange = getDateRangeFromStreamData(stream.data as Record<string, unknown>);
+        return {
+          id: stream.id,
+          symbol: stream.symbol,
+          date: stream.date,
+          totalPoints: stream.totalPoints,
+          marketType: stream.marketType,
+          createdAt: stream.createdAt,
+          dateRange
+        };
+      });
+    } catch (error) {
+      console.error('Error fetching streams with date ranges:', error);
+      throw new Error('Failed to fetch streams with date ranges');
+    }
+  }
+
   static async getAnalysisResultsByDateRange(
     symbol: string, 
     startDate: string, 
@@ -271,6 +390,9 @@ export class DatabaseService {
       if (result.length === 0) {
         throw new Error('Analysis result not found');
       }
+
+      // Regenerate chart image after schema change
+      await this.regenerateSegmentImage(id);
     } catch (error) {
       console.error('Error updating analysis schema:', error);
       throw new Error('Failed to update analysis schema');
@@ -301,7 +423,14 @@ export class DatabaseService {
         .where(eq(schema.analysisResults.id, id))
         .returning();
       
-      return result.length > 0;
+      const ok = result.length > 0;
+      if (ok) {
+        await this.regenerateSegmentImage(id, {
+          patternPoint: updateData.patternPoint,
+          schemaType: updateData.schemaType,
+        });
+      }
+      return ok;
     } catch (error) {
       console.error('Error updating analysis result:', error);
       throw new Error('Failed to update analysis result');
@@ -446,6 +575,34 @@ export class DatabaseService {
       console.error('Error deleting chart image:', error);
       throw new Error('Failed to delete chart image');
     }
+  }
+
+  // Regenerate the analysis image for a segment
+  private static async regenerateSegmentImage(
+    segmentId: string,
+    override?: { patternPoint?: string | null; schemaType?: 'R' | 'V' | 'UNCLASSIFIED' }
+  ): Promise<void> {
+    const seg = await this.getSegmentData(segmentId);
+    if (!seg) return;
+
+    const imageSegmentData = {
+      id: seg.id,
+      pointsData: (seg.pointsData as Array<{ timestamp: string; open: number; high: number; low: number; close: number; volume: number }>) || [],
+      minPrice: Number(seg.minPrice),
+      maxPrice: Number(seg.maxPrice),
+      averagePrice: Number(seg.averagePrice),
+      x0: Number(seg.x0),
+      patternPoint: override?.patternPoint !== undefined ? override.patternPoint : (seg.patternPoint as string | null),
+    };
+
+    const imageData = createAnalysisResultImage(segmentId, imageSegmentData, 800, 400);
+
+    await this.db.delete(schema.analysisResultsImages).where(eq(schema.analysisResultsImages.analysisResultId, segmentId));
+    await this.db.insert(schema.analysisResultsImages).values({
+      id: imageData.id,
+      analysisResultId: imageData.analysisResultId,
+      imgData: imageData.imgData,
+    });
   }
 
   static async getAnalysisStats(): Promise<{

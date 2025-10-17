@@ -70,8 +70,12 @@ function generateSVGChart(
       .label { font-family: Arial, sans-serif; font-size: 11px; fill: #666; }
       .label-bold { font-family: Arial, sans-serif; font-size: 11px; fill: #333; font-weight: 600; }
       .data-point { fill: #94a3b8; stroke: #64748b; stroke-width: 1; }
-      .last-point { fill: #ef4444; stroke: #dc2626; stroke-width: 2; }
+      .last-point { fill: #3b82f6; stroke: #2563eb; stroke-width: 2; }
       .pattern-point { fill: #10b981; stroke: #059669; stroke-width: 3; }
+      .equal-price-point { fill: #f59e0b; stroke: #d97706; stroke-width: 1; }
+      .equal-price-segment { stroke: #f59e0b; stroke-width: 4; }
+      .peak-point { fill: #ef4444; stroke: #dc2626; stroke-width: 1; }
+      .peak-segment { stroke: #ef4444; stroke-width: 3; }
     </style>
   `;
   
@@ -142,39 +146,207 @@ function generateSVGChart(
       svg += `<text x="${xPos}" y="${chartHeight + 20}" class="label" text-anchor="middle">${timeLabel}</text>`;
     }
     
-    // Création du chemin pour la ligne
-    let path = `<path d="M`;
+    // Préparation des données avec coordonnées et métadonnées
+    const pointsXY = pointsData.map((p, idx) => ({
+      x: getXPosition(p.timestamp),
+      y: getYPosition(p.close),
+      close: p.close,
+      timestamp: p.timestamp,
+      index: idx,
+    }));
     
+    // Détection des caractéristiques de chaque point
+    const pointFeatures = pointsXY.map((pt, i) => {
+      const isEqualToPrev = i > 0 && pointsXY[i - 1].close === pt.close;
+      const isEqualToNext = i < pointsXY.length - 1 && pointsXY[i + 1].close === pt.close;
+      
+      // Détection de pic (sommet haut ou bas)
+      let isPeak = false;
+      if (i > 0 && i < pointsXY.length - 1) {
+        const prev = pointsXY[i - 1].close;
+        const curr = pt.close;
+        const next = pointsXY[i + 1].close;
+        // Pic haut : prix > précédent ET prix > suivant
+        // Pic bas : prix < précédent ET prix < suivant
+        isPeak = (curr > prev && curr > next) || (curr < prev && curr < next);
+      }
+      
+      return {
+        isEqualPrice: isEqualToPrev || isEqualToNext,
+        isPeak,
+        isEqualToPrev,
+      };
+    });
+    
+    // Création du chemin principal (ligne bleue de base)
+    let path = `<path d="M`;
+    pointsXY.forEach((pt, index) => {
+      if (index === 0) {
+        path += `${pt.x},${pt.y}`;
+      } else {
+        path += ` L${pt.x},${pt.y}`;
+      }
+    });
+    path += `" class="data-line" />`;
+    svg += path;
+
+    // Segments jaunes entre points consécutifs avec exactement le même prix de clôture
+    for (let i = 0; i < pointsXY.length - 1; i++) {
+      const a = pointsXY[i];
+      const b = pointsXY[i + 1];
+      if (a.close === b.close) {
+        svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="equal-price-segment" />`;
+      }
+    }
+    
+    // Segments rouges partant des pics
+    for (let i = 0; i < pointsXY.length; i++) {
+      if (!pointFeatures[i].isPeak) continue;
+      
+      const peakPt = pointsXY[i];
+      
+      // Direction vers l'avant (si existe)
+      if (i < pointsXY.length - 1) {
+        let endIdx = i + 1;
+        let shouldStop = false;
+        
+        // Chercher jusqu'où dessiner le segment rouge
+        while (endIdx < pointsXY.length && !shouldStop) {
+          const currClose = pointsXY[endIdx].close;
+          const prevClose = pointsXY[endIdx - 1].close;
+          
+          // Stop si point jaune (prix égal avec voisin)
+          if (pointFeatures[endIdx].isEqualPrice) {
+            shouldStop = true;
+            break;
+          }
+          
+          // Stop si changement de variation
+          if (endIdx >= i + 2) {
+            const beforeClose = pointsXY[endIdx - 2].close;
+            const variation1 = prevClose - beforeClose;
+            const variation2 = currClose - prevClose;
+            // Changement de signe = changement de variation
+            if ((variation1 > 0 && variation2 < 0) || (variation1 < 0 && variation2 > 0)) {
+              shouldStop = true;
+              break;
+            }
+          }
+          
+          endIdx++;
+        }
+        
+        // Dessiner segment rouge du pic jusqu'à endIdx-1
+        for (let j = i; j < Math.min(endIdx, pointsXY.length); j++) {
+          if (j < pointsXY.length - 1) {
+            const from = pointsXY[j];
+            const to = pointsXY[j + 1];
+            svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="peak-segment" />`;
+          }
+        }
+      }
+      
+      // Direction vers l'arrière (si existe)
+      if (i > 0) {
+        let startIdx = i - 1;
+        let shouldStop = false;
+        
+        // Chercher jusqu'où dessiner le segment rouge
+        while (startIdx >= 0 && !shouldStop) {
+          const currClose = pointsXY[startIdx].close;
+          const nextClose = pointsXY[startIdx + 1].close;
+          
+          // Stop si point jaune (prix égal avec voisin)
+          if (pointFeatures[startIdx].isEqualPrice) {
+            shouldStop = true;
+            break;
+          }
+          
+          // Stop si changement de variation
+          if (startIdx <= i - 2) {
+            const afterClose = pointsXY[startIdx + 2].close;
+            const variation1 = nextClose - currClose;
+            const variation2 = afterClose - nextClose;
+            // Changement de signe = changement de variation
+            if ((variation1 > 0 && variation2 < 0) || (variation1 < 0 && variation2 > 0)) {
+              shouldStop = true;
+              break;
+            }
+          }
+          
+          startIdx--;
+        }
+        
+        // Dessiner segment rouge de startIdx+1 jusqu'au pic
+        for (let j = Math.max(startIdx + 1, 0); j < i; j++) {
+          const from = pointsXY[j];
+          const to = pointsXY[j + 1];
+          svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="peak-segment" />`;
+        }
+      }
+    }
+    
+    // Ajout des points sur la ligne
+    // Ordre de superposition: gris < vert < jaune/rouge/bleu
+    // (dessinés en couches pour contrôler l'ordre Z)
+    
+    // Couche 1: Points normaux gris (r=3)
     pointsData.forEach((point, index) => {
       const x = getXPosition(point.timestamp);
       const y = getYPosition(point.close);
+      const isLastPoint = index === pointsData.length - 1;
+      const isPatternPoint = patternPoint && point.timestamp === patternPoint;
+      const feature = pointFeatures[index];
       
-      if (index === 0) {
-        path += `${x},${y}`;
-      } else {
-        path += ` L${x},${y}`;
+      if (!feature.isPeak && !feature.isEqualPrice && !isPatternPoint && !isLastPoint) {
+        svg += `<circle cx="${x}" cy="${y}" r="3" class="data-point" />`;
       }
     });
     
-    path += `" class="data-line" />`;
-    svg += path;
+    // Couche 2: Pattern points verts (r=6) - dessinés EN PREMIER pour être derrière
+    pointsData.forEach((point, index) => {
+      const x = getXPosition(point.timestamp);
+      const y = getYPosition(point.close);
+      const isPatternPoint = patternPoint && point.timestamp === patternPoint;
+      
+      if (isPatternPoint) {
+        svg += `<circle cx="${x}" cy="${y}" r="6" class="pattern-point" />`;
+      }
+    });
     
-    // Ajout des points sur la ligne
+    // Couche 3: Points à prix égal jaunes (r=3) - par-dessus tout y compris vert
+    pointsData.forEach((point, index) => {
+      const x = getXPosition(point.timestamp);
+      const y = getYPosition(point.close);
+      const feature = pointFeatures[index];
+      
+      // Afficher le point jaune MÊME s'il y a un pattern point au même endroit
+      if (feature.isEqualPrice) {
+        svg += `<circle cx="${x}" cy="${y}" r="3" class="equal-price-point" />`;
+      }
+    });
+    
+    // Couche 4: Points pics rouges (r=3) - par-dessus tout y compris vert
+    pointsData.forEach((point, index) => {
+      const x = getXPosition(point.timestamp);
+      const y = getYPosition(point.close);
+      const feature = pointFeatures[index];
+      
+      // Afficher le point rouge MÊME s'il y a un pattern point au même endroit
+      if (feature.isPeak) {
+        svg += `<circle cx="${x}" cy="${y}" r="3" class="peak-point" />`;
+      }
+    });
+    
+    // Couche 5: Dernier point X0 bleu (r=6) - tout devant
     pointsData.forEach((point, index) => {
       const x = getXPosition(point.timestamp);
       const y = getYPosition(point.close);
       const isLastPoint = index === pointsData.length - 1;
       const isPatternPoint = patternPoint && point.timestamp === patternPoint;
       
-      if (isPatternPoint) {
-        // Point pattern (jaune)
-        svg += `<circle cx="${x}" cy="${y}" r="8" class="pattern-point" />`;
-      } else if (isLastPoint) {
-        // Dernier point X0 (rouge)
+      if (isLastPoint && !isPatternPoint) {
         svg += `<circle cx="${x}" cy="${y}" r="6" class="last-point" />`;
-      } else {
-        // Points normaux
-        svg += `<circle cx="${x}" cy="${y}" r="3" class="data-point" />`;
       }
     });
   } else {

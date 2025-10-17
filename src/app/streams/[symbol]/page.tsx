@@ -20,7 +20,7 @@ import {
   Heading,
   Flex,
 } from "@chakra-ui/react";
-import { BarChart3, Calendar, Database, ArrowLeft, Play } from 'lucide-react';
+import { BarChart3, Calendar, Database, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
 
@@ -32,21 +32,19 @@ interface StreamsPageProps {
 // Server component pour la liste des streams
 async function StreamsListServer({ symbol }: { symbol: string }) {
   try {
-    // Récupérer tous les streams (stock data) pour ce symbole
-    const allStockData = await DatabaseService.getAllStockData();
-    const symbolStreams = allStockData.filter(stock => 
-      stock.symbol.toUpperCase() === symbol.toUpperCase()
-    );
-
-    // Récupérer les statistiques de segments pour ce symbole
-    const [segmentCounts, datasetCounts] = await Promise.all([
+    // Récupérer les streams avec leurs intervalles de dates et les statistiques de segments
+    const [streamsWithDateRanges, segmentCountsBySymbol] = await Promise.all([
+      DatabaseService.getStreamsWithDateRanges(symbol),
       DatabaseService.getSegmentCountsForSymbols([symbol.toUpperCase()]),
-      DatabaseService.getDatasetCountsForSymbols([symbol.toUpperCase()]),
     ]);
+
+    // Récupérer les statistiques de segments pour chaque stream spécifique
+    const streamIds = streamsWithDateRanges.map(stream => stream.id);
+    const segmentCountsByStream = await DatabaseService.getSegmentCountsForStreams(streamIds);
 
     return (
       <VStack gap={6} align="stretch">
-        {symbolStreams.length === 0 ? (
+        {streamsWithDateRanges.length === 0 ? (
           <Card.Root>
             <Card.Body textAlign="center" py={12}>
               <Box mb={4}>
@@ -71,20 +69,20 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
                       {symbol} Streams
                     </Heading>
                     <Text color="fg.muted">
-                      {symbolStreams.length} stream{symbolStreams.length > 1 ? 's' : ''} available
+                      {streamsWithDateRanges.length} stream{streamsWithDateRanges.length > 1 ? 's' : ''} available
                     </Text>
                   </VStack>
                   <HStack gap={4}>
                     <HStack gap={2}>
                       <Database size={16} color="var(--chakra-colors-gray-500)" />
                       <Text fontSize="sm" color="fg.muted">
-                        {symbolStreams.reduce((sum, stream) => sum + stream.totalPoints, 0).toLocaleString()} total points
+                        {streamsWithDateRanges.reduce((sum, stream) => sum + stream.totalPoints, 0).toLocaleString()} total points
                       </Text>
                     </HStack>
                     <HStack gap={2}>
                       <BarChart3 size={16} color="var(--chakra-colors-gray-500)" />
                       <Text fontSize="sm" color="fg.muted">
-                        {segmentCounts[symbol.toUpperCase()] ?? 0} segments
+                        {segmentCountsBySymbol[symbol.toUpperCase()] ?? 0} total segments
                       </Text>
                     </HStack>
                   </HStack>
@@ -94,7 +92,7 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
 
             {/* Liste des streams */}
             <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)" }} gap={6}>
-              {symbolStreams.map((stream) => (
+              {streamsWithDateRanges.map((stream) => (
                 <GridItem key={stream.id} className="stagger-item">
                   <Card.Root
                     className="hover-lift"
@@ -113,7 +111,7 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
                           </Box>
                           <VStack align="start" gap={0}>
                             <Text fontSize="lg" fontWeight="semibold" color="fg.default">
-                              {stream.date}
+                              {stream.dateRange}
                             </Text>
                             <Text fontSize="sm" color="fg.muted">
                               {formatDate(stream.createdAt.toISOString())}
@@ -137,7 +135,7 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
                           <HStack gap={2}>
                             <BarChart3 size={14} color="var(--chakra-colors-gray-500)" />
                             <Text color="fg.muted">
-                              {Math.round(stream.totalPoints / 120)} est. segments
+                              {segmentCountsByStream[stream.id] ?? 0} segments
                             </Text>
                           </HStack>
                         </HStack>
@@ -145,31 +143,17 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
                         <Box borderTop="1px" borderColor="border.default" />
                         
                         {/* Actions */}
-                        <VStack gap={2} align="stretch">
-                          <Button
-                            asChild
-                            colorPalette="blue"
-                            size="md"
-                            w="full"
-                          >
-                            <Link href={`/analysis/${stream.symbol}?stream=${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <BarChart3 size={18} style={{ marginRight: '8px' }} />
-                              Analyze Stream
-                            </Link>
-                          </Button>
-                          
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            w="full"
-                          >
-                            <Link href={`/slideshow/${stream.symbol}?stream=${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Play size={16} style={{ marginRight: '8px' }} />
-                              Slideshow
-                            </Link>
-                          </Button>
-                        </VStack>
+                        <Button
+                          asChild
+                          colorPalette="blue"
+                          size="md"
+                          w="full"
+                        >
+                          <Link href={`/analysis/${stream.symbol}?stream=${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <BarChart3 size={18} style={{ marginRight: '8px' }} />
+                            Analyze Stream
+                          </Link>
+                        </Button>
                       </VStack>
                     </Card.Body>
                   </Card.Root>
@@ -213,6 +197,7 @@ function formatDate(dateString: string) {
   });
 }
 
+
 // Main page component
 export default async function StreamsPage({ params }: StreamsPageProps) {
   const resolvedParams = await params;
@@ -221,7 +206,6 @@ export default async function StreamsPage({ params }: StreamsPageProps) {
   return (
     <Navigation
       breadcrumbs={[
-        { label: 'Home', href: '/' },
         { label: `${symbol} Streams` }
       ]}
       pageTitle={`${symbol} Data Streams`}

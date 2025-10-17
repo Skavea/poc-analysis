@@ -36,6 +36,7 @@ interface AnalysisPageProps {
     filter?: string;
     schema?: string | string[];
     pattern?: string | string[];
+    stream?: string;
   }>;
 }
 
@@ -50,10 +51,14 @@ async function AnalysisStatsServer({
     filter?: string;
     schema?: string | string[];
     pattern?: string | string[];
+    stream?: string;
   };
   setHasExistingAnalysis?: (value: boolean) => void;
 }) {
-  const results = await DatabaseService.getAnalysisResults(symbol);
+  // Récupérer les segments selon le contexte
+  const results = searchParams.stream 
+    ? await DatabaseService.getAnalysisResultsByStreamId(searchParams.stream)
+    : await DatabaseService.getAnalysisResults(symbol);
   
   const rCount = results.filter(r => r.schemaType === 'R').length;
   const vCount = results.filter(r => r.schemaType === 'V').length;
@@ -78,9 +83,14 @@ async function AnalysisStatsServer({
     setHasExistingAnalysis(hasExistingAnalysis);
   }
 
-  // Filter results based on search params
-  const schemaFilters = Array.isArray(searchParams.schema) ? searchParams.schema : searchParams.schema ? [searchParams.schema] : [];
-  const patternFilters = Array.isArray(searchParams.pattern) ? searchParams.pattern : searchParams.pattern ? [searchParams.pattern] : [];
+  // Filter results based on search params (normalize: treat undefined/empty/'all' as no filter)
+  const normalizeFilters = (value: string | string[] | undefined) => {
+    const arr = Array.isArray(value) ? value : value ? [value] : [];
+    return arr.filter(v => v && v !== 'all');
+  };
+
+  const schemaFilters = normalizeFilters(searchParams.schema);
+  const patternFilters = normalizeFilters(searchParams.pattern);
   
   let filteredResults = results;
   
@@ -239,7 +249,7 @@ async function AnalysisStatsServer({
                 cursor="pointer"
                 asChild
               >
-                <Link href={`/segment/${encodeURIComponent(result.id)}`}>
+                <Link href={`/segment/${encodeURIComponent(result.id)}${searchParams.stream ? `?stream=${searchParams.stream}` : ''}`}>
                   <Card.Header pb={3}>
                     <Flex align="center" justify="space-between">
                       <HStack gap={2}>
@@ -360,13 +370,29 @@ export default function AnalysisPage({ params, searchParams }: AnalysisPageProps
   const resolvedSearchParams = use(searchParams);
   const symbol = resolvedParams.symbol;
 
+  // Déterminer les breadcrumbs et le titre selon qu'un stream est sélectionné ou non
+  const breadcrumbs = resolvedSearchParams.stream 
+    ? [
+        { label: `${symbol} Streams`, href: `/streams/${symbol}` },
+        { label: `Analysis: ${symbol}` }
+      ]
+    : [
+        { label: `Analysis: ${symbol}` }
+      ];
+
+  const pageTitle = resolvedSearchParams.stream 
+    ? `Analysis: ${symbol} (Stream ${resolvedSearchParams.stream.split('_')[1]})`
+    : `Analysis: ${symbol}`;
+
+  const pageSubtitle = resolvedSearchParams.stream 
+    ? "Stream-specific analysis and trend visualization"
+    : "All streams analysis and trend visualization";
+
   return (
     <Navigation 
-      breadcrumbs={[
-        { label: `Analysis: ${symbol}` }
-      ]}
-      pageTitle={`Analysis: ${symbol}`}
-      pageSubtitle="Sub-datasets and trend analysis"
+      breadcrumbs={breadcrumbs}
+      pageTitle={pageTitle}
+      pageSubtitle={pageSubtitle}
       pageActions={
         <ClientAnalysisStatus symbol={symbol} />
       }

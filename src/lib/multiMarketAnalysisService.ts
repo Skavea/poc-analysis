@@ -323,15 +323,12 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
     }>;
     originalPointCount: number;
     pointsInRegion: number;
-  }>): Promise<number> {
+  }>, stockDataId: string): Promise<number> {
     const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
     
     for (const segment of segments) {
       try {
-        // Construire le stockDataId à partir du symbol et date du segment
-        const stockDataId = `${segment.symbol}_${segment.date}`;
-        
         // Sauvegarder le segment
         await sql`
           INSERT INTO analysis_results (
@@ -340,7 +337,7 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
             points_data, original_point_count, points_in_region, schema_type
           ) VALUES (
             ${segment.id}, -- "AAPL_2025-01-23_abc123"
-            ${stockDataId}, -- "AAPL_2025-01-23"
+            ${stockDataId}, -- exact stock_data.id of the stream
             ${segment.symbol},      -- "AAPL" - GARDÉ pour les requêtes
             ${segment.date},        -- "2025-01-23" - GARDÉ pour les requêtes
             ${segment.segmentStart},
@@ -429,8 +426,8 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
       // Utiliser la méthode originale extractSegments qui fonctionne pour AAPL, GLD, USO, SPY
       const segments = this.extractSegments(symbol, marketData);
       
-      // 5. Sauvegarder les résultats AVEC la date des données
-      const savedCount = await this.saveAnalysisResults(segments);
+      // 5. Sauvegarder les résultats en liant tous les segments au stock_data.id exact
+      const savedCount = await this.saveAnalysisResults(segments, stockDataId);
       
       console.log(`✅ Successfully processed ${symbol} (${marketType}): ${savedCount} segments created`);
       

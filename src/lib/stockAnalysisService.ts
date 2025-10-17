@@ -467,15 +467,12 @@ export class StockAnalysisService {
     }>;
     originalPointCount: number;
     pointsInRegion: number;
-  }>): Promise<number> {
+  }>, stockDataId: string): Promise<number> {
     const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
     
     for (const segment of segments) {
       try {
-        // Construire le stockDataId à partir du symbol et date du segment
-        const stockDataId = `${segment.symbol}_${segment.date}`;
-        
         // Sauvegarder le segment
         await sql`
           INSERT INTO analysis_results (
@@ -484,7 +481,7 @@ export class StockAnalysisService {
             points_data, original_point_count, points_in_region, schema_type
           ) VALUES (
             ${segment.id}, -- "AAPL_2025-01-23_abc123"
-            ${stockDataId}, -- "AAPL_2025-01-23"
+            ${stockDataId}, -- exact stock_data.id of the stream
             ${segment.symbol},      -- "AAPL" - GARDÉ pour les requêtes
             ${segment.date},        -- "2025-01-23" - GARDÉ pour les requêtes
             ${segment.segmentStart},
@@ -603,14 +600,14 @@ export class StockAnalysisService {
       // Fetch data from API
       const stockData = await this.fetchStockData(symbol);
       
-      // Save raw data
-      await this.saveStockData(symbol, stockData);
+      // Save raw data and capture stockDataId for this stream
+      const stockDataId = await this.saveStockData(symbol, stockData);
       
       // Extract and analyze segments
       const segments = this.extractSegments(symbol, stockData);
       
       // Save analysis results
-      const savedCount = await this.saveAnalysisResults(segments);
+      const savedCount = await this.saveAnalysisResults(segments, stockDataId);
       
       return {
         success: true,
