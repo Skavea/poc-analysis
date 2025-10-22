@@ -29,7 +29,7 @@ export default function AddStockForm() {
   const handleAddStock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSymbol.trim()) {
-      setError('Please enter a stock symbol');
+      setError('Please enter a symbol');
       return;
     }
 
@@ -43,18 +43,21 @@ export default function AddStockForm() {
         body: JSON.stringify({ symbol: newSymbol.trim().toUpperCase() }),
       });
 
-      if (response.ok) {
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         setNewSymbol('');
-        // Simple success feedback
-        alert(`${newSymbol.trim().toUpperCase()} has been added successfully!`);
-        window.location.reload(); // Simple refresh to show new data
+        // Afficher un message de succès avec retours à la ligne
+        alert(data.message || `${newSymbol.trim().toUpperCase()} a été ajouté avec succès !`);
+        window.location.reload(); // Recharger pour afficher les nouvelles données
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to add stock');
+        // Afficher le message d'erreur détaillé
+        const errorMessage = data.message || data.error || 'Failed to add market';
+        setError(errorMessage);
       }
     } catch (error) {
       console.error('Error adding stock:', error);
-      setError('Failed to add stock');
+      setError('Error adding market');
     } finally {
       setIsAdding(false);
     }
@@ -74,10 +77,10 @@ export default function AddStockForm() {
               </Box>
               <VStack align="start" gap={0}>
                 <Text fontSize="lg" fontWeight="bold" color="fg.default">
-                  Add New Stock
+                  Add New Market
                 </Text>
                 <Text fontSize="sm" color="fg.muted">
-                  Fetch and analyze stock data from Alpha Vantage
+                  Fetch and analyze data from Alpha Vantage
                 </Text>
               </VStack>
             </HStack>
@@ -88,11 +91,11 @@ export default function AddStockForm() {
           <VStack gap={4} align="stretch">
             <Field.Root invalid={!!error} suppressHydrationWarning={true}>
               <Field.Label fontSize="sm" color="fg.muted">
-                Stock Symbol
+                Market Symbol
               </Field.Label>
               <HStack gap={3}>
                 <Input
-                  placeholder="Enter stock symbol (e.g., AAPL)"
+                  placeholder="Enter symbol (e.g., AAPL, HO.PA, BTC)"
                   value={newSymbol}
                   onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
                   disabled={isAdding}
@@ -114,13 +117,15 @@ export default function AddStockForm() {
                   ) : (
                     <>
                       <Plus size={16} style={{ marginRight: '8px' }} />
-                      Add Stock
+                      Add
                     </>
                   )}
                 </Button>
               </HStack>
               {error && (
-                <Field.ErrorText>{error}</Field.ErrorText>
+                <Field.ErrorText whiteSpace="pre-wrap" fontSize="sm">
+                  {error}
+                </Field.ErrorText>
               )}
             </Field.Root>
             

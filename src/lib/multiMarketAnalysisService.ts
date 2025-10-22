@@ -57,8 +57,9 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
 
   /**
    * Récupère les données depuis l'API selon le type de marché (avec proxy)
+   * Méthode publique pour permettre la vérification des plages de dates avant création
    */
-  async fetchMarketData(symbol: string, marketType: MarketType): Promise<Record<string, unknown>> {
+  public async fetchMarketData(symbol: string, marketType: MarketType): Promise<Record<string, unknown>> {
     const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
     if (!apiKey) {
       throw new Error('ALPHA_VANTAGE_API_KEY is required');

@@ -231,7 +231,7 @@ export default function AdvancedAnalysisFilter({
                   onChange={(e) => handlePatternFilterChange('yes', e.target.checked)}
                   style={{ margin: 0 }}
                 />
-                <Text fontSize="sm">Oui ({patternYesCount})</Text>
+                <Text fontSize="sm">Yes ({patternYesCount})</Text>
               </label>
               
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -241,7 +241,7 @@ export default function AdvancedAnalysisFilter({
                   onChange={(e) => handlePatternFilterChange('no', e.target.checked)}
                   style={{ margin: 0 }}
                 />
-                <Text fontSize="sm">Non ({patternNoCount})</Text>
+                <Text fontSize="sm">No ({patternNoCount})</Text>
               </label>
               
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>

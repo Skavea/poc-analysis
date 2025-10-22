@@ -22,7 +22,7 @@ export default function SegmentGeneratedImage({ imageData, segmentId }: SegmentG
       <Card.Root mt={6}>
         <Card.Header pb={4}>
           <Heading size="lg" color="fg.default">
-            Graphique Généré
+            Generated Chart
           </Heading>
         </Card.Header>
         <Card.Body pt={0}>
@@ -37,7 +37,7 @@ export default function SegmentGeneratedImage({ imageData, segmentId }: SegmentG
             <VStack gap={3}>
               <BarChart3 size={48} color="var(--chakra-colors-gray-400)" />
               <Text color="fg.muted" fontSize="sm">
-                Image non disponible pour ce segment
+                Image not available for this segment
               </Text>
             </VStack>
           </Box>
@@ -50,7 +50,7 @@ export default function SegmentGeneratedImage({ imageData, segmentId }: SegmentG
     <Card.Root mt={6}>
       <Card.Header pb={4}>
         <Heading size="lg" color="fg.default">
-          Graphique Généré
+          Generated Chart
         </Heading>
       </Card.Header>
       <Card.Body pt={0}>
@@ -64,7 +64,7 @@ export default function SegmentGeneratedImage({ imageData, segmentId }: SegmentG
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageData}
-            alt={`Graphique généré pour le segment ${segmentId}`}
+            alt={`Generated chart for segment ${segmentId}`}
             style={{
               width: '100%',
               height: 'auto',
@@ -76,7 +76,7 @@ export default function SegmentGeneratedImage({ imageData, segmentId }: SegmentG
         {/* Informations supplémentaires */}
         <Box mt={4}>
           <Text fontSize="xs" color="fg.muted" textAlign="center">
-            Image générée automatiquement lors de la création du segment
+            Image automatically generated when the segment was created
           </Text>
         </Box>
       </Card.Body>

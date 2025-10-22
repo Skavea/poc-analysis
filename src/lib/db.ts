@@ -155,6 +155,90 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * Récupère les données groupées par symbole avec le total des points
+   * Évite les doublons quand un symbole a plusieurs streams
+   * Calcule les vraies plages de dates depuis les données JSON
+   */
+  static async getStockDataGroupedBySymbol(): Promise<Array<{
+    symbol: string;
+    totalPoints: number;
+    marketType: string;
+    streamCount: number;
+    dateRange: string;
+    earliestDate: string;
+    latestDate: string;
+  }>> {
+    try {
+      // Récupérer toutes les données avec les données JSON pour calculer les vraies dates
+      const allStreams = await this.db
+        .select({
+          symbol: schema.stockData.symbol,
+          totalPoints: schema.stockData.totalPoints,
+          marketType: schema.stockData.marketType,
+          data: schema.stockData.data
+        })
+        .from(schema.stockData)
+        .orderBy(desc(schema.stockData.createdAt));
+
+      // Grouper par symbole et calculer les vraies plages de dates
+      const groupedData = new Map<string, {
+        symbol: string;
+        totalPoints: number;
+        marketType: string;
+        streamCount: number;
+        allTimestamps: string[];
+      }>();
+
+      for (const stream of allStreams) {
+        const key = stream.symbol;
+        
+        if (!groupedData.has(key)) {
+          groupedData.set(key, {
+            symbol: stream.symbol,
+            totalPoints: 0,
+            marketType: stream.marketType,
+            streamCount: 0,
+            allTimestamps: []
+          });
+        }
+
+        const group = groupedData.get(key)!;
+        group.totalPoints += stream.totalPoints;
+        group.streamCount += 1;
+
+        // Extraire les timestamps des données JSON
+        const data = stream.data as Record<string, unknown>;
+        const timestamps = Object.keys(data).filter(key => 
+          key.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+        );
+        group.allTimestamps.push(...timestamps);
+      }
+
+      // Convertir en array et calculer les plages de dates
+      return Array.from(groupedData.values()).map(group => {
+        const sortedTimestamps = group.allTimestamps.sort();
+        const startDate = sortedTimestamps[0]?.split(' ')[0] || 'N/A';
+        const endDate = sortedTimestamps[sortedTimestamps.length - 1]?.split(' ')[0] || 'N/A';
+        
+        const dateRange = startDate === endDate ? startDate : `${startDate} - ${endDate}`;
+        
+        return {
+          symbol: group.symbol,
+          totalPoints: group.totalPoints,
+          marketType: group.marketType,
+          streamCount: group.streamCount,
+          dateRange,
+          earliestDate: startDate,
+          latestDate: endDate
+        };
+      });
+    } catch (error) {
+      console.error('Error fetching grouped stock data:', error);
+      throw new Error('Failed to fetch grouped stock data');
+    }
+  }
+
   static async upsertStockData(data: NewStockData): Promise<StockData> {
     try {
       const [result] = await this.db

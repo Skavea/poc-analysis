@@ -222,7 +222,7 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                     </Badge>
                   ) : analysis.patternPoint === '' || analysis.patternPoint === 'null' ? (
                     <Badge colorPalette="red" variant="subtle" size="sm">
-                      Non
+                      No
                     </Badge>
                   ) : (
                     <Text fontSize="sm" fontWeight="semibold" color="#eab308">
