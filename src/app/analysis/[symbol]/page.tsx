@@ -183,11 +183,11 @@ async function AnalysisStatsServer({
                 <Card.Body>
                   <VStack gap={3} align="stretch">
                     <HStack justify="space-between">
-                      <Text fontSize="sm" color="fg.muted">Oui:</Text>
+                      <Text fontSize="sm" color="fg.muted">Yes:</Text>
                       <Text fontSize="lg" fontWeight="bold" color="green.600">{patternYesCount}</Text>
                     </HStack>
                     <HStack justify="space-between">
-                      <Text fontSize="sm" color="fg.muted">Non:</Text>
+                      <Text fontSize="sm" color="fg.muted">No:</Text>
                       <Text fontSize="lg" fontWeight="bold" color="red.600">{patternNoCount}</Text>
                     </HStack>
                     <HStack justify="space-between">

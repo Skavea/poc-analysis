@@ -28,8 +28,9 @@ import ClassificationStatus from '@/components/ClassificationStatus';
 
 // Server component for stock list
 async function StockListServer() {
-  const stocks = await DatabaseService.getAllStockData();
-  const symbols = Array.from(new Set(stocks.map(s => s.symbol.toUpperCase())));
+  // Utiliser la nouvelle méthode groupée pour éviter les doublons
+  const stocksGrouped = await DatabaseService.getStockDataGroupedBySymbol();
+  const symbols = stocksGrouped.map(s => s.symbol.toUpperCase());
   const [segmentCounts, datasetCounts] = await Promise.all([
     DatabaseService.getSegmentCountsForSymbols(symbols),
     DatabaseService.getDatasetCountsForSymbols(symbols),
@@ -37,7 +38,7 @@ async function StockListServer() {
 
   return (
     <VStack gap={6} align="stretch">
-      {stocks.length === 0 ? (
+      {stocksGrouped.length === 0 ? (
         <Card.Root>
           <Card.Body textAlign="center" py={12}>
             <Box mb={4}>
@@ -53,8 +54,8 @@ async function StockListServer() {
         </Card.Root>
       ) : (
             <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)", xl: "repeat(4, 1fr)" }} gap={6}>
-              {stocks.map((stock) => (
-                <GridItem key={stock.id} className="stagger-item">
+              {stocksGrouped.map((stock) => (
+                <GridItem key={stock.symbol} className="stagger-item">
                   <Card.Root
                     className="hover-lift"
                     cursor="pointer"
@@ -75,7 +76,7 @@ async function StockListServer() {
                           {stock.symbol}
                         </Text>
                         <Text fontSize="sm" color="fg.muted">
-                          {formatDate(stock.createdAt.toISOString())}
+                          {stock.dateRange}
                         </Text>
                       </VStack>
                     </HStack>
@@ -91,7 +92,7 @@ async function StockListServer() {
                     <HStack gap={4} justify="space-between" fontSize="sm">
                       <HStack gap={2}>
                         <Calendar size={14} color="var(--chakra-colors-gray-500)" />
-                        <Text color="fg.muted">{(datasetCounts[stock.symbol.toUpperCase()] ?? 1).toString()} {datasetCounts[stock.symbol.toUpperCase()] > 1 ? "Streams" : "Stream"}</Text>
+                        <Text color="fg.muted">{stock.streamCount.toString()} {stock.streamCount > 1 ? "Streams" : "Stream"}</Text>
                       </HStack>
                       <HStack gap={2}>
                         <Database size={14} color="var(--chakra-colors-gray-500)" />

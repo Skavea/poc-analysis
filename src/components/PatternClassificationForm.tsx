@@ -188,7 +188,7 @@ export default function PatternClassificationForm({
           </VStack>
         </Field.Root>
 
-        {/* Bouton de sélection de point - visible seulement si "Oui" est sélectionné */}
+        {/* Bouton de sélection de point - visible seulement si "Yes" est sélectionné */}
         {hasPattern === 'yes' && (
           <HStack gap={3} align="center">
             <Button

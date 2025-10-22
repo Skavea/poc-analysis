@@ -22,13 +22,13 @@ export default function RegenerateImagesButton() {
       const json = await res.json();
       
       if (!res.ok || !json.success) {
-        setResult('Erreur lors de la régénération');
+        setResult('Error during regeneration');
       } else {
-        setResult(`✓ Régénéré: ${json.count} images`);
+        setResult(`✓ Regenerated: ${json.count} images`);
       }
     } catch (error) {
       console.error('Erreur régénération:', error);
-      setResult('✗ Erreur réseau');
+      setResult('✗ Network error');
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,7 @@ export default function RegenerateImagesButton() {
             animation: loading ? 'spin 1s linear infinite' : 'none',
           }} 
         />
-        {loading ? 'Régénération en cours…' : 'Régénérer images'}
+        {loading ? 'Regenerating...' : 'Regenerate Images'}
       </Button>
       {result && (
         <div style={{ 
