@@ -13,7 +13,7 @@ import { z } from 'zod';
 // Stock Data Table (avec market_type)
 export const stockData = pgTable('stock_data', {
   id: varchar('id', { length: 255 }).primaryKey(), // "AAPL_2025-01-23", "BTC_2025-01-23"
-  symbol: varchar('symbol', { length: 10 }).notNull(),
+  symbol: varchar('symbol', { length: 20 }).notNull(),
   date: varchar('date', { length: 10 }).notNull(),
   data: jsonb('data').notNull(),
   totalPoints: integer('total_points').notNull(),
@@ -30,7 +30,7 @@ export const stockData = pgTable('stock_data', {
 export const analysisResults = pgTable('analysis_results', {
   id: varchar('id', { length: 255 }).primaryKey(), // "AAPL_2025-01-23_abc123"
   stockDataId: varchar('stock_data_id', { length: 255 }).notNull().references(() => stockData.id, { onDelete: 'cascade' }),
-  symbol: varchar('symbol', { length: 10 }).notNull(), // GARDÉ pour les requêtes
+  symbol: varchar('symbol', { length: 20 }).notNull(), // GARDÉ pour les requêtes
   date: varchar('date', { length: 10 }).notNull(),     // GARDÉ pour les requêtes
   segmentStart: timestamp('segment_start', { withTimezone: true }).notNull(),
   segmentEnd: timestamp('segment_end', { withTimezone: true }).notNull(),

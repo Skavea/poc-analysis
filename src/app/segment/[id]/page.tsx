@@ -179,6 +179,15 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                 
                 <HStack justify="space-between">
                   <Text fontSize="sm" fontWeight="medium" color="fg.muted">
+                    Date
+                  </Text>
+                  <Text fontSize="sm" color="fg.default" fontWeight="semibold">
+                    {analysis.date}
+                  </Text>
+                </HStack>
+                
+                <HStack justify="space-between">
+                  <Text fontSize="sm" fontWeight="medium" color="fg.muted">
                     Time Range
                   </Text>
                   <Text fontSize="sm" color="fg.default">
