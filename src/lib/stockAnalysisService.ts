@@ -38,39 +38,6 @@ export class StockAnalysisService {
     return StockAnalysisService.instance;
   }
 
-  /**
-   * Fetch stock data from Alpha Vantage API
-   */
-  async fetchStockData(symbol: string): Promise<Record<string, unknown>> {
-    try {
-      if (!this.apiKey) {
-        throw new Error('ALPHA_VANTAGE_API_KEY is required');
-      }
-      
-      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&outputsize=full&apikey=${this.apiKey}`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data['Error Message']) {
-        throw new Error(data['Error Message']);
-      }
-
-      if (data.Note) {
-        throw new Error(data.Note);
-      }
-
-      const timeSeries = data['Time Series (1min)'];
-      if (!timeSeries) {
-        throw new Error('No time series data found');
-      }
-
-      return timeSeries;
-    } catch (error) {
-      console.error('Error fetching stock data:', error);
-      throw error;
-    }
-  }
 
   /**
    * Extrait la date des données API (la plus récente)
@@ -587,40 +554,6 @@ export class StockAnalysisService {
     
     // Create a new array with only the points we want to keep
     return prices.map((_, index) => index).filter(index => indicesToKeep[index]);
-  }
   
-  async processStock(symbol: string): Promise<{
-    success: boolean;
-    message: string;
-    segmentsCreated: number;
-  }> {
-    try {
-      console.log(`Processing stock: ${symbol}`);
-      
-      // Fetch data from API
-      const stockData = await this.fetchStockData(symbol);
-      
-      // Save raw data and capture stockDataId for this stream
-      const stockDataId = await this.saveStockData(symbol, stockData);
-      
-      // Extract and analyze segments
-      const segments = this.extractSegments(symbol, stockData);
-      
-      // Save analysis results
-      const savedCount = await this.saveAnalysisResults(segments, stockDataId);
-      
-      return {
-        success: true,
-        message: `Successfully processed ${symbol}`,
-        segmentsCreated: savedCount
-      };
-    } catch (error: unknown) {
-      console.error(`Error processing ${symbol}:`, error);
-      return {
-        success: false,
-        message: `Error processing ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        segmentsCreated: 0
-      };
-    }
   }
 }

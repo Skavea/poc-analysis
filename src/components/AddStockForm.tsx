@@ -19,17 +19,17 @@ import {
   Field,
   Spinner,
 } from "@chakra-ui/react";
-import { Plus, Database } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 export default function AddStockForm() {
-  const [newSymbol, setNewSymbol] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const handleAddStock = async (e: React.FormEvent) => {
+  const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSymbol.trim()) {
-      setError('Please enter a symbol');
+    if (!selectedFile) {
+      setError('Veuillez sélectionner un fichier');
       return;
     }
 
@@ -37,103 +37,116 @@ export default function AddStockForm() {
       setIsAdding(true);
       setError('');
       
-      const response = await fetch('/api/process-stock', {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      
+      const response = await fetch('/api/upload-market-data', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: newSymbol.trim().toUpperCase() }),
+        body: formData,
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setNewSymbol('');
-        // Afficher un message de succès avec retours à la ligne
-        alert(data.message || `${newSymbol.trim().toUpperCase()} a été ajouté avec succès !`);
-        window.location.reload(); // Recharger pour afficher les nouvelles données
+        setSelectedFile(null);
+        alert(data.message || 'Fichier traité avec succès !');
+        window.location.reload();
       } else {
-        // Afficher le message d'erreur détaillé
-        const errorMessage = data.message || data.error || 'Failed to add market';
+        const errorMessage = data.message || data.error || 'Erreur lors du traitement du fichier';
         setError(errorMessage);
       }
     } catch (error) {
-      console.error('Error adding stock:', error);
-      setError('Error adding market');
+      console.error('Error uploading file:', error);
+      setError('Erreur lors de l\'upload du fichier');
     } finally {
       setIsAdding(false);
     }
   };
 
-      return (
-        <Card.Root className="animate-fade-in">
-          <Card.Header pb={4}>
-            <HStack gap={4}>
-              <Box
-                p={2}
-                bg="brand.50"
-                rounded="lg"
-                color="brand.600"
-              >
-                <Database size={24} />
-              </Box>
-              <VStack align="start" gap={0}>
-                <Text fontSize="lg" fontWeight="bold" color="fg.default">
-                  Add New Market
-                </Text>
-                <Text fontSize="sm" color="fg.muted">
-                  Fetch and analyze data from Alpha Vantage
-                </Text>
-              </VStack>
-            </HStack>
-          </Card.Header>
-      
-      <Card.Body pt={0}>
-        <form onSubmit={handleAddStock}>
-          <VStack gap={4} align="stretch">
-            <Field.Root invalid={!!error} suppressHydrationWarning={true}>
-              <Field.Label fontSize="sm" color="fg.muted">
-                Market Symbol
-              </Field.Label>
-              <HStack gap={3}>
-                <Input
-                  placeholder="Enter symbol (e.g., AAPL, HO.PA, BTC)"
-                  value={newSymbol}
-                  onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
-                  disabled={isAdding}
-                  size="md"
-                  suppressHydrationWarning={true}
-                />
-                <Button
-                  type="submit"
-                  colorPalette="blue"
-                  disabled={isAdding || !newSymbol.trim()}
-                  minW="140px"
-                  suppressHydrationWarning={true}
-                >
-                  {isAdding ? (
-                    <>
-                      <Spinner size="sm" mr={2} />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={16} style={{ marginRight: '8px' }} />
-                      Add
-                    </>
-                  )}
-                </Button>
-              </HStack>
-              {error && (
-                <Field.ErrorText whiteSpace="pre-wrap" fontSize="sm">
-                  {error}
-                </Field.ErrorText>
-              )}
-            </Field.Root>
-            
-            <Text fontSize="xs" color="fg.muted">
-              💡 Tip: Actions américaines (AAPL, GOOGL), françaises (HO.PA, MC.PA), crypto (BTC, ETH)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+      setError('');
+    }
+  };
+
+  return (
+    <Card.Root className="animate-fade-in">
+      <Card.Header pb={4}>
+        <HStack gap={4}>
+          <Box
+            p={2}
+            bg="brand.50"
+            rounded="lg"
+            color="brand.600"
+          >
+            <Upload size={24} />
+          </Box>
+          <VStack align="start" gap={0}>
+            <Text fontSize="lg" fontWeight="bold" color="fg.default">
+              Add New Market
+            </Text>
+            <Text fontSize="sm" color="fg.muted">
+              Upload a market data file
             </Text>
           </VStack>
-        </form>
+        </HStack>
+      </Card.Header>
+  
+      <Card.Body pt={0}>
+        <form onSubmit={handleFileUpload}>
+            <VStack gap={4} align="stretch">
+              <Field.Root invalid={!!error} suppressHydrationWarning={true}>
+                <Field.Label fontSize="sm" color="fg.muted">
+                  Select File
+                </Field.Label>
+                <HStack gap={3} align="stretch">
+                  <Input
+                    type="file"
+                    accept=".txt"
+                    onChange={handleFileChange}
+                    disabled={isAdding}
+                    size="md"
+                    suppressHydrationWarning={true}
+                    flex={1}
+                  />
+                  <Button
+                    type="submit"
+                    colorPalette="blue"
+                    disabled={isAdding || !selectedFile}
+                    minW="140px"
+                    suppressHydrationWarning={true}
+                  >
+                    {isAdding ? (
+                      <>
+                        <Spinner size="sm" mr={2} />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={16} style={{ marginRight: '8px' }} />
+                        Upload
+                      </>
+                    )}
+                  </Button>
+                </HStack>
+                {selectedFile && (
+                  <Text fontSize="xs" color="fg.muted" mt={1}>
+                    📁 Fichier sélectionné: {selectedFile.name}
+                  </Text>
+                )}
+                {error && (
+                  <Field.ErrorText whiteSpace="pre-wrap" fontSize="sm">
+                    {error}
+                  </Field.ErrorText>
+                )}
+              </Field.Root>
+              
+              <Text fontSize="xs" color="fg.muted">
+                💡 Format attendu: NOMACTIF_YYYY-MM-DD.txt (ex: MC_2025-10-21.txt)
+              </Text>
+            </VStack>
+          </form>
       </Card.Body>
     </Card.Root>
   );
