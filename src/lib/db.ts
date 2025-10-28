@@ -7,7 +7,7 @@
 
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { eq, and, desc, sql, gte, lte, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, lte, inArray, ne, isNotNull } from 'drizzle-orm';
 import * as schema from './schema';
 import { 
   StockData, 
@@ -320,6 +320,34 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching all analysis results:', error);
       throw new Error('Failed to fetch analysis results');
+    }
+  }
+
+  /**
+   * Récupère tous les résultats d'analyse classés
+   * Un résultat est considéré comme classé si :
+   * - schemaType != 'UNCLASSIFIED' (R ou V)
+   * - patternPoint != null && != 'UNCLASSIFIED' && != 'unclassified' && != '' && != 'null'
+   */
+  static async getClassifiedAnalysisResults(): Promise<AnalysisResult[]> {
+    try {
+      return await this.db
+        .select()
+        .from(schema.analysisResults)
+        .where(
+          and(
+            ne(schema.analysisResults.schemaType, 'UNCLASSIFIED'),
+            isNotNull(schema.analysisResults.patternPoint),
+            ne(schema.analysisResults.patternPoint, 'UNCLASSIFIED'),
+            ne(schema.analysisResults.patternPoint, 'unclassified'),
+            ne(schema.analysisResults.patternPoint, ''),
+            ne(schema.analysisResults.patternPoint, 'null')
+          )
+        )
+        .orderBy(desc(schema.analysisResults.schemaType), desc(schema.analysisResults.createdAt));
+    } catch (error) {
+      console.error('Error fetching classified analysis results:', error);
+      throw new Error('Failed to fetch classified analysis results');
     }
   }
 

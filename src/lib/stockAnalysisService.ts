@@ -538,6 +538,9 @@ export class StockAnalysisService {
     redPointCount: number;
     greenPointCount: number;
     blackPointsCount: number;
+    u: number;
+    redPointsFormatted: string;
+    greenPointsFormatted: string;
   } | null {
     if (timestamps.length < 6) return null;
 
@@ -662,15 +665,35 @@ export class StockAnalysisService {
     // Generate a unique ID
     const segmentId = `${symbol}_${date}_${uuidv4().substring(0, 8)}`;
 
-    // Calculate black points count (variations strictes + 1)
+    // Calculate black points count (variations strictes + 2)
     const blackPointsCount = this.calculateBlackPointsCount(finalPrices);
+    
+    // Calculate u parameter: (maxPrice - minPrice) / blackPointsCount
+    // u représente l'intervalle moyen par point noir
+    // Tronquer à 2 décimales sans arrondir (garder seulement 2 chiffres après la virgule)
+    const uRaw = blackPointsCount > 0 ? (finalMaxPrice - finalMinPrice) / blackPointsCount : 0;
+    const u = Math.floor(uRaw * 100) / 100; // Tronquer à 2 décimales (pas d'arrondi)
+    
+    // Calculate formatted red points: (close - averagePrice) pour chaque point rouge, en ordre chronologique
+    // Format: "price1 price2 price3 ..." (prix en float, séparés par des espaces)
+    const redPointsFormatted = finalRedPoints
+      .map(point => (point.close - finalAveragePrice).toFixed(2))
+      .join(' ');
+    
+    // Calculate formatted green points: (close - averagePrice) pour chaque point vert, en ordre chronologique
+    // Format: "price1 price2 price3 ..." (prix en float, séparés par des espaces)
+    const greenPointsFormatted = finalGreenPoints
+      .map(point => (point.close - finalAveragePrice).toFixed(2))
+      .join(' ');
     
     // Debug: Log pour vérifier le calcul (à retirer après validation)
     if (process.env.NODE_ENV === 'development') {
       console.log(`[Black Points Debug] Segment ${segmentId}:`, {
         prices: finalPrices.slice(0, 10).map(p => p.toFixed(2)), // Premiers 10 prix
         totalPrices: finalPrices.length,
-        blackPointsCount
+        blackPointsCount,
+        u: u.toFixed(4),
+        priceRange: (finalMaxPrice - finalMinPrice).toFixed(2)
       });
     }
     
@@ -693,12 +716,15 @@ export class StockAnalysisService {
       greenPointsData: finalGreenPoints,
       redPointCount: finalRedPoints.length,
       greenPointCount: finalGreenPoints.length,
-      blackPointsCount
+      blackPointsCount,
+      u,
+      redPointsFormatted,
+      greenPointsFormatted
     };
   }
 
   /**
-   * Calcule le nombre de points noirs (variations strictes + 1)
+   * Calcule le nombre de points noirs (variations strictes + 2)
    * Une variation stricte est un changement de direction dans les prix.
    * Les plateaux (variations = 0) sont ignorés : si on est en croissance et qu'on a un plateau
    * suivi de croissance, on ne compte pas de variation. Si le plateau est suivi de décroissance,
@@ -1454,6 +1480,9 @@ export class StockAnalysisService {
     redPointCount: number;
     greenPointCount: number;
     blackPointsCount: number;
+    u: number;
+    redPointsFormatted: string;
+    greenPointsFormatted: string;
   }>, stockDataId: string): Promise<number> {
     const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
@@ -1488,7 +1517,8 @@ export class StockAnalysisService {
             id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
             x0, min_price, max_price, average_price, trend_direction, 
             points_data, original_point_count, points_in_region, schema_type,
-            red_points_data, green_points_data, red_point_count, green_point_count, black_points_count
+            red_points_data, green_points_data, red_point_count, green_point_count, black_points_count, u,
+            red_points_formatted, green_points_formatted
           ) VALUES (
             ${segment.id}, -- "AAPL_2025-01-23_abc123"
             ${stockDataId}, -- exact stock_data.id of the stream
@@ -1510,7 +1540,10 @@ export class StockAnalysisService {
             ${JSON.stringify(segment.greenPointsData)},
             ${segment.redPointCount},
             ${segment.greenPointCount},
-            ${segment.blackPointsCount}
+            ${segment.blackPointsCount},
+            ${segment.u},
+            ${segment.redPointsFormatted},
+            ${segment.greenPointsFormatted}
           )
           ON CONFLICT (id) DO NOTHING
         `;

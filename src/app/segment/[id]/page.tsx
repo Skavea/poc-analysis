@@ -267,6 +267,17 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                 
                 <HStack justify="space-between">
                   <Text fontSize="sm" fontWeight="medium" color="fg.muted">
+                    u
+                  </Text>
+                  <Text fontSize="sm" color="fg.default" fontWeight="semibold">
+                    {analysis.u !== null && analysis.u !== undefined 
+                      ? Number(analysis.u).toFixed(2) 
+                      : '-'}
+                  </Text>
+                </HStack>
+                
+                <HStack justify="space-between">
+                  <Text fontSize="sm" fontWeight="medium" color="fg.muted">
                     Patterns
                   </Text>
                   {/* Debug: {JSON.stringify(analysis.patternPoint)} */}

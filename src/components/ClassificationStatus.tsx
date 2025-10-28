@@ -22,6 +22,7 @@ import {
 import { BarChart3, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import RegenerateImagesButton from '@/components/RegenerateImagesButton';
+import ExportClassifiedCsvButton from '@/components/ExportClassifiedCsvButton';
 
 interface ClassificationStats {
   totalClassified: number;
@@ -176,6 +177,7 @@ export default async function ClassificationStatus() {
                   </Link>
                 </Button>
                 <RegenerateImagesButton />
+                <ExportClassifiedCsvButton />
               </VStack>
             </Card.Body>
           </Card.Root>
