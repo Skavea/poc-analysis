@@ -52,8 +52,9 @@ export async function runAnalysisAction(symbol: string) {
       return { error: 'No segments could be extracted from the data' };
     }
     
-    // Save analysis results
-    await analysisService.saveAnalysisResults(segments);
+    // Save analysis results - need to get the stock data ID
+    const stockDataId = `${symbol.toUpperCase()}_${existingStock.date}`;
+    await analysisService.saveAnalysisResults(segments, stockDataId);
     
     revalidatePath(`/analysis/${symbol}`);
     return { success: true, segmentsCreated: segments.length };

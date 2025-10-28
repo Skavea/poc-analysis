@@ -286,15 +286,20 @@ async function AnalysisStatsServer({
 
                   <Card.Body pt={0}>
                     <VStack gap={4} align="stretch">
-                      <HStack gap={2}>
-                        <Clock size={16} color="var(--chakra-colors-gray-500)" />
-                        <Text fontSize="sm" color="fg.muted">
-                          {formatTime(result.segmentStart.toISOString())} - {formatTime(result.segmentEnd.toISOString())}
+                      <HStack gap={2} justify="space-between">
+                        <HStack gap={2}>
+                          <Clock size={16} color="var(--chakra-colors-gray-500)" />
+                          <Text fontSize="sm" color="fg.muted">
+                            {formatTime(result.segmentStart.toISOString())} - {formatTime(result.segmentEnd.toISOString())}
+                          </Text>
+                        </HStack>
+                        <Text fontSize="sm" color="fg.muted" fontWeight="medium">
+                          {formatDate(result.date)}
                         </Text>
                       </HStack>
                       
                       <HStack gap={4} justify="space-between" fontSize="sm">
-                        <Text color="fg.muted">{result.pointCount} pts • {formatDate(result.date)}</Text>
+                        <Text color="fg.muted">{result.pointCount} pts</Text>
                         <HStack gap={4}>
                           <Text color="fg.default" fontWeight="medium">x0: ${Number(result.x0).toFixed(2)}</Text>
                           <Text color="fg.muted">Avg: ${Number(result.averagePrice).toFixed(2)}</Text>

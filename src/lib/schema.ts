@@ -45,6 +45,10 @@ export const analysisResults = pgTable('analysis_results', {
   pointsData: jsonb('points_data'),
   originalPointCount: integer('original_point_count'),
   pointsInRegion: integer('points_in_region'),
+  redPointsData: jsonb('red_points_data'), // Premier ensemble de points filtrés
+  greenPointsData: jsonb('green_points_data'), // Deuxième ensemble (pics et extrémités)
+  redPointCount: integer('red_point_count'), // Nombre de points dans le premier ensemble
+  greenPointCount: integer('green_point_count'), // Nombre de points dans le deuxième ensemble
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   trendDirectionCheck: check('trend_direction_check', sql`${table.trendDirection} IN ('UP', 'DOWN')`),

@@ -88,11 +88,15 @@ function parseMarketDataFile(content: string): { data: Record<string, any>, symb
  * Format: NOMACTIF_YYYY-MM-DD.txt
  */
 function extractSymbolAndDate(filename: string): { symbol: string, date: string } {
-  const nameWithoutExt = filename.replace('.txt', '');
+  // Nettoyer le nom de fichier : supprimer extension, espaces, parenthèses, etc.
+  let nameWithoutExt = filename.replace(/\.txt$/i, ''); // Supprimer .txt (insensible à la casse)
+  nameWithoutExt = nameWithoutExt.replace(/\s*\([^)]*\)/g, ''); // Supprimer (1), (2), etc.
+  nameWithoutExt = nameWithoutExt.trim(); // Supprimer espaces en début/fin
+  
   const parts = nameWithoutExt.split('_');
   
   if (parts.length < 2) {
-    throw new Error('Format de nom de fichier invalide. Attendu: NOMACTIF_YYYY-MM-DD.txt');
+    throw new Error(`Format de nom de fichier invalide. Attendu: NOMACTIF_YYYY-MM-DD.txt. Reçu: ${filename}`);
   }
 
   const symbol = parts[0].toUpperCase();
@@ -101,9 +105,10 @@ function extractSymbolAndDate(filename: string): { symbol: string, date: string 
   // Valider le format de date
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(dateStr)) {
-    throw new Error('Format de date invalide. Attendu: YYYY-MM-DD');
+    throw new Error(`Format de date invalide. Attendu: YYYY-MM-DD. Reçu: ${dateStr} dans le fichier: ${filename}`);
   }
 
+  console.log(`📁 Fichier analysé: ${filename} -> Symbole: ${symbol}, Date: ${dateStr}`);
   return { symbol, date: dateStr };
 }
 

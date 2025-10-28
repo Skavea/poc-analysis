@@ -11,7 +11,7 @@
 import { use } from 'react';
 import { DatabaseService } from '@/lib/db';
 import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
-import SegmentChart from '@/components/SegmentChart';
+import ChartWithFilters, { ChartWithFiltersProvider } from '@/components/ChartWithFilters';
 import PatternClassificationForm from '@/components/PatternClassificationForm';
 import PointAnalysisCard from '@/components/PointAnalysisCard';
 import BackButton from '@/components/BackButton';
@@ -83,20 +83,64 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
       {/* Left Column - Chart */}
       <GridItem>
         <Card.Root>
-          <Card.Header pb={4}>
-            <HStack justify="space-between" align="center">
-              <Heading size="lg" color="fg.default">
-                Price Chart
-              </Heading>
-              <ExportChartButton analysis={analysis} />
-            </HStack>
-          </Card.Header>
-          <Card.Body pt={0}>
-            <SegmentChart 
-              pointsData={pointsData} 
-              analysis={analysis} 
-              patternPoint={analysis.patternPoint}
-            />
+          <ChartWithFiltersProvider>
+            <Card.Header pb={4}>
+              <VStack align="stretch" gap={3}>
+                <Heading size="lg" color="fg.default">
+                  Price Chart
+                </Heading>
+                <HStack justify="space-between" align="center">
+                  <ChartWithFilters
+                    allPoints={pointsData || []}
+                    redPoints={(analysis.redPointsData as Array<{
+                      timestamp: string;
+                      open: number;
+                      high: number;
+                      low: number;
+                      close: number;
+                      volume: number;
+                    }>) || null}
+                    greenPoints={(analysis.greenPointsData as Array<{
+                      timestamp: string;
+                      open: number;
+                      high: number;
+                      low: number;
+                      close: number;
+                      volume: number;
+                    }>) || null}
+                    analysis={analysis}
+                    patternPoint={analysis.patternPoint}
+                    showButtons={true}
+                    showChart={false}
+                  />
+                  <ExportChartButton analysis={analysis} />
+                </HStack>
+              </VStack>
+            </Card.Header>
+            <Card.Body pt={0}>
+              <ChartWithFilters
+                allPoints={pointsData || []}
+                redPoints={(analysis.redPointsData as Array<{
+                  timestamp: string;
+                  open: number;
+                  high: number;
+                  low: number;
+                  close: number;
+                  volume: number;
+                }>) || null}
+                greenPoints={(analysis.greenPointsData as Array<{
+                  timestamp: string;
+                  open: number;
+                  high: number;
+                  low: number;
+                  close: number;
+                  volume: number;
+                }>) || null}
+                analysis={analysis}
+                patternPoint={analysis.patternPoint}
+                showButtons={false}
+                showChart={true}
+              />
             
             {/* Legend */}
             <Box mt={4} display="flex" flexWrap="wrap" gap={4} fontSize="sm">
@@ -128,6 +172,7 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
               </HStack>
             </Box>
           </Card.Body>
+        </ChartWithFiltersProvider>
         </Card.Root>
         
         {/* Image générée automatiquement */}

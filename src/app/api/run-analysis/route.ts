@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // Get existing stock data
     const stockData = await sql`
-      SELECT data FROM stock_data 
+      SELECT id, data FROM stock_data 
       WHERE symbol = ${symbol.toUpperCase()}
       ORDER BY created_at DESC
       LIMIT 1
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const segments = service.extractSegments(symbol, stockData[0].data);
     
     // Save analysis results
-    await service.saveAnalysisResults(segments);
+    await service.saveAnalysisResults(segments, stockData[0].id);
 
     return NextResponse.json({
       success: true,

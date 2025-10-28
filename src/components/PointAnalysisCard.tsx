@@ -3,10 +3,10 @@
  * ==================
  * 
  * Displays the point analysis information for a segment
- * Shows original points, points in region, and final points
+ * Shows original points, points in region, red points, green points, and final points
  */
 
-import { Card, VStack, HStack, Text, Badge } from "@chakra-ui/react";
+import { Card, VStack, HStack, Text, Badge, Box } from "@chakra-ui/react";
 import { AnalysisResultWithChart } from "@/lib/schema";
 
 interface PointAnalysisCardProps {
@@ -57,6 +57,30 @@ export default function PointAnalysisCard({ analysis }: PointAnalysisCardProps) 
                  'Optimal'}
               </Badge>
             </HStack>
+          </HStack>
+
+          <HStack justify="space-between">
+            <HStack gap={2}>
+              <Box width="8px" height="8px" bg="red.500" rounded="full" />
+              <Text fontSize="sm" fontWeight="medium" color="fg.muted">
+                Red Points
+              </Text>
+            </HStack>
+            <Text fontSize="sm" color="red.600" fontWeight="semibold">
+              {analysis.redPointCount ?? '-'}
+            </Text>
+          </HStack>
+
+          <HStack justify="space-between">
+            <HStack gap={2}>
+              <Box width="8px" height="8px" bg="green.500" rounded="full" />
+              <Text fontSize="sm" fontWeight="medium" color="fg.muted">
+                Green Points
+              </Text>
+            </HStack>
+            <Text fontSize="sm" color="green.600" fontWeight="semibold">
+              {analysis.greenPointCount ?? '-'}
+            </Text>
           </HStack>
         </VStack>
       </Card.Body>
