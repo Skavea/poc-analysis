@@ -262,12 +262,13 @@ export default async function AnalysisAllPage({ searchParams }: AnalysisAllPageP
   );
 }
 
+// Formate l'heure en format français sans appliquer le décalage horaire
+// Utilise directement les valeurs UTC de la date pour éviter le changement d'heure
 function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
+  const date = new Date(dateString);
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 function formatDate(dateString: string) {

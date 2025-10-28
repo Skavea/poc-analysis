@@ -125,12 +125,21 @@ export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
     }
   }, [currentSegment, loading, currentIndex, goToNext, router, segments]);
 
+  // Fonction utilitaire pour formater l'heure sans décalage horaire
+  const formatTimeForToast = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  };
+
   // Fonctions pour la sélection de points
   const handlePointSelection = useCallback((timestamp: string) => {
     setSelectedPatternPoint(timestamp);
     toast({
       title: 'Point sélectionné',
-      description: `Point sélectionné: ${new Date(timestamp).toLocaleTimeString()}`,
+      description: `Point sélectionné: ${formatTimeForToast(timestamp)}`,
       type: 'success',
       duration: 2000,
       closable: true,
@@ -334,10 +343,12 @@ export default function SegmentSlideshow({ segments }: SegmentSlideshowProps) {
 }
 
 // Helper function to format time
+// Formate l'heure en format français sans appliquer le décalage horaire
+// Utilise directement les valeurs UTC de la date pour éviter le changement d'heure
 function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  const date = new Date(dateString);
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
 }

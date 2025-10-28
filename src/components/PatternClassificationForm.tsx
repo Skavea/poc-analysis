@@ -71,8 +71,14 @@ export default function PatternClassificationForm({
   }, [onPointSelect]);
 
   // Fonction pour formater l'heure du point sélectionné
+  // Formate l'heure en format français sans appliquer le décalage horaire
+  // Utilise directement les valeurs UTC de la date pour éviter le changement d'heure
   const formatSelectedPointTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString();
+    const date = new Date(timestamp);
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
   };
 
   // Fonction pour trouver les données du point sélectionné

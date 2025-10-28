@@ -537,6 +537,7 @@ export class StockAnalysisService {
     }>;
     redPointCount: number;
     greenPointCount: number;
+    blackPointsCount: number;
   } | null {
     if (timestamps.length < 6) return null;
 
@@ -661,6 +662,17 @@ export class StockAnalysisService {
     // Generate a unique ID
     const segmentId = `${symbol}_${date}_${uuidv4().substring(0, 8)}`;
 
+    // Calculate black points count (variations strictes + 1)
+    const blackPointsCount = this.calculateBlackPointsCount(finalPrices);
+    
+    // Debug: Log pour vérifier le calcul (à retirer après validation)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Black Points Debug] Segment ${segmentId}:`, {
+        prices: finalPrices.slice(0, 10).map(p => p.toFixed(2)), // Premiers 10 prix
+        totalPrices: finalPrices.length,
+        blackPointsCount
+      });
+    }
     
     return {
       id: segmentId,
@@ -680,8 +692,96 @@ export class StockAnalysisService {
       redPointsData: finalRedPoints,
       greenPointsData: finalGreenPoints,
       redPointCount: finalRedPoints.length,
-      greenPointCount: finalGreenPoints.length
+      greenPointCount: finalGreenPoints.length,
+      blackPointsCount
     };
+  }
+
+  /**
+   * Calcule le nombre de points noirs (variations strictes + 1)
+   * Une variation stricte est un changement de direction dans les prix.
+   * Les plateaux (variations = 0) sont ignorés : si on est en croissance et qu'on a un plateau
+   * suivi de croissance, on ne compte pas de variation. Si le plateau est suivi de décroissance,
+   * on compte une variation.
+   * 
+   * Les points noirs sont comptés comme suit :
+   * - Chaque changement de direction (croissance ↔ décroissance) = 1 variation stricte
+   * - Le premier point est toujours un point noir
+   * - Donc : nombre de points noirs = nombre de changements de direction + 1
+   * 
+   * Exemples:
+   * - [100, 102, 103, 101] -> variations: [+2, +1, -2] -> 1 changement strict -> 2 points noirs
+   * - [100, 102, 102, 102, 103] -> variations: [+2, 0, 0, +1] -> filtré: [+2, +1] -> 0 changement -> 1 point noir
+   * - [100, 102, 102, 102, 101] -> variations: [+2, 0, 0, -1] -> filtré: [+2, -1] -> 1 changement -> 2 points noirs
+   * - [100, 98, 96, 97, 99] -> variations: [-2, -2, +1, +2] -> filtré: [-2, -2, +1, +2] -> 1 changement -> 2 points noirs
+   * 
+   * @param prices Tableau des prix dans l'ordre chronologique
+   * @returns Nombre de points noirs (nombre de variations strictes + 1)
+   */
+  private calculateBlackPointsCount(prices: number[]): number {
+    if (prices.length < 2) {
+      return prices.length; // Si moins de 2 points, le nombre de points = nombre de points noirs
+    }
+
+    // Calculer les variations entre points consécutifs
+    const variations: number[] = [];
+    for (let i = 0; i < prices.length - 1; i++) {
+      variations.push(prices[i + 1] - prices[i]);
+    }
+
+    if (variations.length < 1) {
+      return 1; // Au moins 1 point noir si on a des points
+    }
+
+    // Filtrer les variations nulles (plateaux) pour ne garder que les variations non nulles
+    // Un plateau ne compte pas comme changement de direction s'il est suivi de la même direction
+    // On construit une séquence de directions (sans tenir compte des zéros)
+    const nonZeroVariations: number[] = [];
+    for (const variation of variations) {
+      if (variation !== 0) {
+        nonZeroVariations.push(variation);
+      }
+      // Si variation === 0, on l'ignore complètement (comme si le point n'existait pas)
+    }
+
+    // Si on n'a aucune variation non nulle, tous les prix sont égaux -> 1 point noir (le premier)
+    if (nonZeroVariations.length === 0) {
+      return 1;
+    }
+
+    // Si on n'a qu'une seule variation non nulle, pas de changement de direction -> 1 point noir (le premier)
+    if (nonZeroVariations.length === 1) {
+      return 1;
+    }
+
+    // Compter les changements de signe entre variations non nulles consécutives
+    // Un changement de signe correspond à un changement de direction (croissance ↔ décroissance)
+    let strictVariationsCount = 0;
+    for (let i = 0; i < nonZeroVariations.length - 1; i++) {
+      const variation1 = nonZeroVariations[i];
+      const variation2 = nonZeroVariations[i + 1];
+      
+      // Changement de signe strict = variation stricte
+      // De positif strict à négatif strict ou vice versa
+      // Note: On ne compte pas 0 car on les a déjà filtrés
+      if ((variation1 > 0 && variation2 < 0) || (variation1 < 0 && variation2 > 0)) {
+        strictVariationsCount++;
+      }
+    }
+
+    // Nombre de points noirs = nombre de changements de direction + 1 (le premier point compte toujours)
+    // Chaque changement de direction crée un nouveau point noir
+    const result = strictVariationsCount + 1;
+    
+    // Debug: Log détaillé pour comprendre le calcul
+    if (process.env.NODE_ENV === 'development' && prices.length <= 20) {
+      console.log(`[Black Points Calc] Prix: [${prices.map(p => p.toFixed(2)).join(', ')}]`);
+      console.log(`[Black Points Calc] Variations: [${variations.map(v => v.toFixed(2)).join(', ')}]`);
+      console.log(`[Black Points Calc] Variations non nulles: [${nonZeroVariations.map(v => v.toFixed(2)).join(', ')}]`);
+      console.log(`[Black Points Calc] Changements de direction: ${strictVariationsCount}, Points noirs: ${result}`);
+    }
+    
+    return result;
   }
 
   /**
@@ -1351,6 +1451,7 @@ export class StockAnalysisService {
     }>;
     redPointCount: number;
     greenPointCount: number;
+    blackPointsCount: number;
   }>, stockDataId: string): Promise<number> {
     const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
@@ -1385,7 +1486,7 @@ export class StockAnalysisService {
             id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
             x0, min_price, max_price, average_price, trend_direction, 
             points_data, original_point_count, points_in_region, schema_type,
-            red_points_data, green_points_data, red_point_count, green_point_count
+            red_points_data, green_points_data, red_point_count, green_point_count, black_points_count
           ) VALUES (
             ${segment.id}, -- "AAPL_2025-01-23_abc123"
             ${stockDataId}, -- exact stock_data.id of the stream
@@ -1406,7 +1507,8 @@ export class StockAnalysisService {
             ${JSON.stringify(segment.redPointsData)},
             ${JSON.stringify(segment.greenPointsData)},
             ${segment.redPointCount},
-            ${segment.greenPointCount}
+            ${segment.greenPointCount},
+            ${segment.blackPointsCount}
           )
           ON CONFLICT (id) DO NOTHING
         `;

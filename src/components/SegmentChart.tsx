@@ -179,8 +179,11 @@ export default function SegmentChart({
             dataKey="timestamp" 
             tickFormatter={(value) => {
               // Le value peut être un nombre (timestamp) ou une string
+              // Formate l'heure sans décalage horaire en utilisant les valeurs UTC
               const date = typeof value === 'number' ? new Date(value) : new Date(value);
-              return date.toLocaleTimeString();
+              const hours = date.getUTCHours().toString().padStart(2, '0');
+              const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+              return `${hours}:${minutes}`;
             }}
             angle={-45}
             textAnchor="end"

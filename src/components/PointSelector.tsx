@@ -59,9 +59,14 @@ export default function PointSelector({
     }
   }, [isActive, onPointSelect]);
 
-  // Fonction pour formater l'heure
+  // Fonction pour formater l'heure sans décalage horaire
+  // Utilise directement les valeurs UTC de la date pour éviter le changement d'heure
   const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString();
+    const date = new Date(timestamp);
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
   };
 
   // Fonction pour obtenir les données du point survolé

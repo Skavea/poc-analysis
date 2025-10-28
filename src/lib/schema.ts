@@ -5,7 +5,7 @@
  * DrizzleORM schema definitions for type-safe database operations
  */
 
-import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, text, unique } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, integer, decimal, timestamp, jsonb, check, text, unique, real } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -49,6 +49,10 @@ export const analysisResults = pgTable('analysis_results', {
   greenPointsData: jsonb('green_points_data'), // Deuxième ensemble (pics et extrémités)
   redPointCount: integer('red_point_count'), // Nombre de points dans le premier ensemble
   greenPointCount: integer('green_point_count'), // Nombre de points dans le deuxième ensemble
+  u: real('u'), // Valeur float pour le paramètre u
+  redPointsFormatted: text('red_points_formatted'), // Points rouges formatés en texte
+  greenPointsFormatted: text('green_points_formatted'), // Points verts formatés en texte
+  blackPointsCount: integer('black_points_count'), // Nombre de points noirs (variations strictes + 1)
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   trendDirectionCheck: check('trend_direction_check', sql`${table.trendDirection} IN ('UP', 'DOWN')`),

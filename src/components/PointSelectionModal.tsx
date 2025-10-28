@@ -176,7 +176,13 @@ export default function PointSelectionModal({
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="timestamp" 
-                tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                tickFormatter={(value) => {
+                  // Formate l'heure sans décalage horaire en utilisant les valeurs UTC
+                  const date = new Date(value);
+                  const hours = date.getUTCHours().toString().padStart(2, '0');
+                  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                  return `${hours}:${minutes}`;
+                }}
                 angle={-45}
                 textAnchor="end"
                 height={80}

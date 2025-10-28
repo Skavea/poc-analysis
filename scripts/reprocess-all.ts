@@ -82,7 +82,7 @@ async function reprocessAllStocks() {
       const segments = service.extractSegments(symbol, stockData[0].data);
       
       // Save the new analysis results
-      const savedCount = await service.saveAnalysisResults(segments);
+      const savedCount = await service.saveAnalysisResults(segments, stockData[0].id);
       
       console.log(`✅ Reprocessing complete! Created ${savedCount} segments for ${symbol}`);
       

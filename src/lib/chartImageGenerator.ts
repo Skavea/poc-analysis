@@ -138,11 +138,12 @@ function generateSVGChart(
       // Ligne de grille verticale
       svg += `<line x1="${xPos}" y1="0" x2="${xPos}" y2="${chartHeight}" class="grid" />`;
       
-      // Label du temps
-      const timeLabel = new Date(point.timestamp).toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      // Label du temps (format français sans décalage horaire)
+      // Utilise directement les valeurs UTC de la date pour éviter le changement d'heure
+      const date = new Date(point.timestamp);
+      const hours = date.getUTCHours().toString().padStart(2, '0');
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      const timeLabel = `${hours}:${minutes}`;
       svg += `<text x="${xPos}" y="${chartHeight + 20}" class="label" text-anchor="middle">${timeLabel}</text>`;
     }
     

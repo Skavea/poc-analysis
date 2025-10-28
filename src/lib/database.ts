@@ -43,6 +43,10 @@ export interface AnalysisResult {
     close: number;
     volume: number;
   }>;
+  u?: number; // Valeur float pour le paramètre u
+  red_points_formatted?: string; // Points rouges formatés en texte
+  green_points_formatted?: string; // Points verts formatés en texte
+  black_points_count?: number; // Nombre de points noirs (variations strictes + 1)
   created_at: string;
 }
 

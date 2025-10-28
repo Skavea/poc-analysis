@@ -82,6 +82,18 @@ export default function PointAnalysisCard({ analysis }: PointAnalysisCardProps) 
               {analysis.greenPointCount ?? '-'}
             </Text>
           </HStack>
+
+          <HStack justify="space-between">
+            <HStack gap={2}>
+              <Box width="8px" height="8px" bg="gray.900" rounded="full" />
+              <Text fontSize="sm" fontWeight="medium" color="fg.muted">
+                Black Points
+              </Text>
+            </HStack>
+            <Text fontSize="sm" color="gray.700" fontWeight="semibold">
+              {analysis.blackPointsCount ?? '-'}
+            </Text>
+          </HStack>
         </VStack>
       </Card.Body>
     </Card.Root>
