@@ -706,21 +706,22 @@ export class StockAnalysisService {
    * 
    * Les points noirs sont comptés comme suit :
    * - Chaque changement de direction (croissance ↔ décroissance) = 1 variation stricte
-   * - Le premier point est toujours un point noir
-   * - Donc : nombre de points noirs = nombre de changements de direction + 1
+   * - Le premier point et le dernier point sont toujours des points noirs
+   * - Donc : nombre de points noirs = nombre de changements de direction + 2
    * 
    * Exemples:
-   * - [100, 102, 103, 101] -> variations: [+2, +1, -2] -> 1 changement strict -> 2 points noirs
-   * - [100, 102, 102, 102, 103] -> variations: [+2, 0, 0, +1] -> filtré: [+2, +1] -> 0 changement -> 1 point noir
-   * - [100, 102, 102, 102, 101] -> variations: [+2, 0, 0, -1] -> filtré: [+2, -1] -> 1 changement -> 2 points noirs
-   * - [100, 98, 96, 97, 99] -> variations: [-2, -2, +1, +2] -> filtré: [-2, -2, +1, +2] -> 1 changement -> 2 points noirs
+   * - [100, 102, 103, 101] -> variations: [+2, +1, -2] -> 1 changement strict -> 3 points noirs (premier, changement, dernier)
+   * - [100, 102, 102, 102, 103] -> variations: [+2, 0, 0, +1] -> filtré: [+2, +1] -> 0 changement -> 2 points noirs (premier et dernier)
+   * - [100, 102, 102, 102, 101] -> variations: [+2, 0, 0, -1] -> filtré: [+2, -1] -> 1 changement -> 3 points noirs (premier, changement, dernier)
+   * - [100, 98, 96, 97, 99] -> variations: [-2, -2, +1, +2] -> filtré: [-2, -2, +1, +2] -> 1 changement -> 3 points noirs (premier, changement, dernier)
    * 
    * @param prices Tableau des prix dans l'ordre chronologique
-   * @returns Nombre de points noirs (nombre de variations strictes + 1)
+   * @returns Nombre de points noirs (nombre de variations strictes + 2)
    */
   private calculateBlackPointsCount(prices: number[]): number {
-    if (prices.length < 2) {
-      return prices.length; // Si moins de 2 points, le nombre de points = nombre de points noirs
+    // Si on a 0 ou 1 point, le nombre de points noirs = nombre de points
+    if (prices.length <= 1) {
+      return prices.length;
     }
 
     // Calculer les variations entre points consécutifs
@@ -744,14 +745,14 @@ export class StockAnalysisService {
       // Si variation === 0, on l'ignore complètement (comme si le point n'existait pas)
     }
 
-    // Si on n'a aucune variation non nulle, tous les prix sont égaux -> 1 point noir (le premier)
+    // Si on n'a aucune variation non nulle, tous les prix sont égaux -> 2 points noirs (premier et dernier)
     if (nonZeroVariations.length === 0) {
-      return 1;
+      return 2;
     }
 
-    // Si on n'a qu'une seule variation non nulle, pas de changement de direction -> 1 point noir (le premier)
+    // Si on n'a qu'une seule variation non nulle, pas de changement de direction -> 2 points noirs (premier et dernier)
     if (nonZeroVariations.length === 1) {
-      return 1;
+      return 2;
     }
 
     // Compter les changements de signe entre variations non nulles consécutives
@@ -769,9 +770,10 @@ export class StockAnalysisService {
       }
     }
 
-    // Nombre de points noirs = nombre de changements de direction + 1 (le premier point compte toujours)
-    // Chaque changement de direction crée un nouveau point noir
-    const result = strictVariationsCount + 1;
+    // Nombre de points noirs = nombre de changements de direction + 2
+    // Le premier point et le dernier point sont toujours des points noirs
+    // Chaque changement de direction crée également un nouveau point noir
+    const result = strictVariationsCount + 2;
     
     // Debug: Log détaillé pour comprendre le calcul
     if (process.env.NODE_ENV === 'development' && prices.length <= 20) {
