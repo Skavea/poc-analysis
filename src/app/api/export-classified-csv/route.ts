@@ -4,7 +4,7 @@
  * 
  * Endpoint pour exporter les données classées au format CSV
  * Format: 4 lignes par entrée classée
- * - Ligne 1: "<a> <b> <c>" où a=0 si R, 1 si V; b=0 si DOWN, 1 si UP; c=valeur de u
+ * - Ligne 1: "<a> <b> <c> <id> <heure_fin>" où a=0 si R, 1 si V; b=0 si DOWN, 1 si UP; c=valeur de u; id=identifiant du segment; heure_fin=heure de fin au format HH:MM (heure française)
  * - Ligne 2: red_points_formatted
  * - Ligne 3: green_points_formatted
  * - Ligne 4: vide
@@ -14,14 +14,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/db';
 
 /**
+ * Formate l'heure de fin du segment en format français HH:MM
+ * Utilise le fuseau horaire français (Europe/Paris)
+ */
+function formatFrenchTime(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  // Formater la date en utilisant le fuseau horaire français (Europe/Paris)
+  const formatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  return formatter.format(dateObj);
+}
+
+/**
  * Génère le contenu CSV à partir des résultats classés
  */
 function generateCSVContent(results: Array<{
+  id: string;
   schemaType: string;
   trendDirection: string;
   u: number | null;
   redPointsFormatted: string | null;
   greenPointsFormatted: string | null;
+  segmentEnd: Date | string;
 }>): string {
   const lines: string[] = [];
 
@@ -36,8 +54,11 @@ function generateCSVContent(results: Array<{
     // c = valeur de u (ou 0 si null)
     const c = result.u ?? 0;
     
-    // Ligne 1: "<a> <b> <c>"
-    lines.push(`${a} ${b} ${c}`);
+    // Formater l'heure de fin du segment en format français HH:MM
+    const endTime = formatFrenchTime(result.segmentEnd);
+    
+    // Ligne 1: "<a> <b> <c> <id> <heure_fin>" avec l'ID du segment et l'heure de fin
+    lines.push(`${a} ${b} ${c} ${result.id} ${endTime}`);
     
     // Ligne 2: red_points_formatted (ou vide si null)
     lines.push(result.redPointsFormatted ?? '');

@@ -125,7 +125,7 @@ export default function ChartWithFilters({
               variant={selectedFilter === 'red' ? 'solid' : 'outline'}
               colorPalette={selectedFilter === 'red' ? 'red' : 'gray'}
               onClick={() => setSelectedFilter('red')}
-              isDisabled={!redPoints || redPoints.length === 0}
+              disabled={!redPoints || redPoints.length === 0}
             >
               Red
             </Button>
@@ -134,7 +134,7 @@ export default function ChartWithFilters({
               variant={selectedFilter === 'green' ? 'solid' : 'outline'}
               colorPalette={selectedFilter === 'green' ? 'green' : 'gray'}
               onClick={() => setSelectedFilter('green')}
-              isDisabled={!greenPoints || greenPoints.length === 0}
+              disabled={!greenPoints || greenPoints.length === 0}
             >
               Green
             </Button>

@@ -7,7 +7,7 @@
 
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { eq, and, desc, sql, gte, lte, inArray, ne, isNotNull } from 'drizzle-orm';
+import { eq, and, or, desc, sql, gte, lte, inArray, ne, isNotNull, isNull } from 'drizzle-orm';
 import * as schema from './schema';
 import { 
   StockData, 
@@ -326,8 +326,8 @@ export class DatabaseService {
   /**
    * Récupère tous les résultats d'analyse classés
    * Un résultat est considéré comme classé si :
-   * - schemaType != 'UNCLASSIFIED' (R ou V)
-   * - patternPoint != null && != 'UNCLASSIFIED' && != 'unclassified' && != '' && != 'null'
+   * - schemaType = 'R' OU 'V'
+   * - patternPoint est NULL OU (patternPoint != 'UNDEFINED' ET patternPoint != 'undefined')
    */
   static async getClassifiedAnalysisResults(): Promise<AnalysisResult[]> {
     try {
@@ -336,12 +336,16 @@ export class DatabaseService {
         .from(schema.analysisResults)
         .where(
           and(
-            ne(schema.analysisResults.schemaType, 'UNCLASSIFIED'),
-            isNotNull(schema.analysisResults.patternPoint),
-            ne(schema.analysisResults.patternPoint, 'UNCLASSIFIED'),
-            ne(schema.analysisResults.patternPoint, 'unclassified'),
-            ne(schema.analysisResults.patternPoint, ''),
-            ne(schema.analysisResults.patternPoint, 'null')
+            // schemaType doit être 'R' ou 'V'
+            inArray(schema.analysisResults.schemaType, ['R', 'V']),
+            // patternPoint doit être NULL ou différent de 'UNDEFINED'/'undefined'
+            or(
+              isNull(schema.analysisResults.patternPoint),
+              and(
+                ne(schema.analysisResults.patternPoint, 'UNDEFINED'),
+                ne(schema.analysisResults.patternPoint, 'undefined')
+              )
+            )
           )
         )
         .orderBy(desc(schema.analysisResults.schemaType), desc(schema.analysisResults.createdAt));
