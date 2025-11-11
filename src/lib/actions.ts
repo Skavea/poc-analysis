@@ -11,29 +11,6 @@ import { revalidatePath } from 'next/cache';
 import { DatabaseService } from './db';
 import { StockAnalysisService } from './stockAnalysisService';
 
-export async function addStockAction(formData: FormData) {
-  const symbol = formData.get('symbol') as string;
-  
-  if (!symbol) {
-    return { error: 'Symbol is required' };
-  }
-
-  try {
-    const analysisService = new StockAnalysisService();
-    const result = await analysisService.processStock(symbol);
-    
-    if (!result.success) {
-      return { error: result.message };
-    }
-    
-    revalidatePath('/');
-    return { success: true, symbol, segmentsCreated: result.segmentsCreated };
-  } catch (error) {
-    console.error('Error adding stock:', error);
-    return { error: 'Failed to add stock' };
-  }
-}
-
 export async function runAnalysisAction(symbol: string) {
   try {
     // Check if stock data exists

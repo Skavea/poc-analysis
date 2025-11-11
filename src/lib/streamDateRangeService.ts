@@ -34,12 +34,53 @@ interface StreamDateInfo {
   totalPoints: number;
 }
 
+interface StreamRow {
+  id: string;
+  symbol: string;
+  market_type: MarketType;
+  data: unknown;
+  total_points: number;
+}
+
 interface AvailableDateRange {
   startDate: Date;
   endDate: Date;
   maxDays: number;
   suggestedDays: number;
 }
+
+/**
+ * Vérifie si un objet correspond au schéma attendu d'une ligne issue de la table stock_data
+ */
+const isStreamRow = (row: unknown): row is StreamRow => {
+  if (!row || typeof row !== 'object') {
+    return false;
+  }
+
+  const candidate = row as Partial<StreamRow>;
+  return typeof candidate.id === 'string'
+    && typeof candidate.symbol === 'string'
+    && typeof candidate.market_type === 'string'
+    && 'data' in candidate
+    && 'total_points' in candidate;
+};
+
+/**
+ * Normalise la structure renvoyée par Neon afin de disposer systématiquement d'un tableau de lignes
+ */
+const normalizeSqlResult = (result: unknown): StreamRow[] => {
+  const possibleRows = Array.isArray(result)
+    ? result
+    : (result && typeof result === 'object' && 'rows' in result
+      ? (result as { rows?: unknown }).rows
+      : undefined);
+
+  if (!Array.isArray(possibleRows)) {
+    return [];
+  }
+
+  return possibleRows.filter(isStreamRow) as StreamRow[];
+};
 
 /**
  * Classe de service pour gérer les plages de dates des streams
@@ -74,12 +115,15 @@ export class StreamDateRangeService {
    * Récupère toutes les plages de dates existantes pour un symbole
    */
   async getExistingDateRanges(symbol: string): Promise<StreamDateInfo[]> {
-    const streams = await this.sql`
+    const queryResult = await this.sql`
       SELECT id, symbol, market_type, data, total_points
       FROM stock_data 
       WHERE symbol = ${symbol.toUpperCase()}
       ORDER BY created_at DESC
     `;
+
+    // Les résultats peuvent être fournis sous forme de tableau brut ou via .rows suivant la configuration SQL
+    const streams = normalizeSqlResult(queryResult);
 
     const streamInfos: StreamDateInfo[] = [];
 

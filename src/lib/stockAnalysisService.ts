@@ -10,6 +10,63 @@ import { neon } from '@neondatabase/serverless';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from 'dotenv';
 
+type DeviationRule = {
+  name: 'redMin' | 'redMax' | 'greenMin' | 'greenMax' | 'regionMin' | 'regionMax';
+  value: number;
+  type: 'min' | 'max';
+  active: boolean;
+};
+
+/**
+ * Structure normalisée d'un segment calculé prêt à être enregistré en base.
+ * Garder ce type synchronisé avec `analysis_results`.
+ */
+type AnalyzedSegment = {
+  id: string;
+  symbol: string;
+  date: string;
+  segmentStart: string;
+  segmentEnd: string;
+  pointCount: number;
+  x0: number;
+  minPrice: number;
+  maxPrice: number;
+  averagePrice: number;
+  trendDirection: 'UP' | 'DOWN';
+  pointsData: Array<{
+    timestamp: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>;
+  originalPointCount: number;
+  pointsInRegion: number;
+  redPointsData: Array<{
+    timestamp: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>;
+  greenPointsData: Array<{
+    timestamp: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>;
+  redPointCount: number;
+  greenPointCount: number;
+  blackPointsCount: number;
+  u: number;
+  redPointsFormatted: string;
+  greenPointsFormatted: string;
+};
+
 // Charger les variables d'environnement
 config({ path: '.env' });
 
@@ -23,6 +80,13 @@ const sql = neon(databaseUrl);
 export class StockAnalysisService {
   private static instance: StockAnalysisService;
   private apiKey: string;
+  private readonly MIN_RED_POINTS = 6;
+  private readonly MAX_RED_POINTS = 30;
+  private readonly MIN_GREEN_POINTS = 6;
+  private readonly MAX_GREEN_POINTS = 25;
+  private readonly MIN_REGION_POINTS = 6;
+  private readonly MAX_REGION_POINTS = 20;
+  private readonly INITIAL_SEGMENT_SIZE = 22;
 
   constructor() {
     this.apiKey = process.env.ALPHA_VANTAGE_API_KEY || '';
@@ -92,48 +156,8 @@ export class StockAnalysisService {
    * @param data Raw stock price data
    * @returns Array of analyzed segments with filtering applied
    */
-  extractSegments(symbol: string, data: Record<string, unknown>): Array<{
-    id: string;
-    symbol: string;
-    date: string;
-    segmentStart: string;
-    segmentEnd: string;
-    pointCount: number;
-    x0: number;
-    minPrice: number;
-    maxPrice: number;
-    averagePrice: number;
-    trendDirection: 'UP' | 'DOWN';
-    pointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    originalPointCount: number;
-    pointsInRegion: number;
-    redPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    greenPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    redPointCount: number;
-    greenPointCount: number;
-  }> {
-    const segments = [];
+  extractSegments(symbol: string, data: Record<string, unknown>): AnalyzedSegment[] {
+    const segments: AnalyzedSegment[] = [];
     const timestamps = Object.keys(data).sort();
     
     // Group by trading days
@@ -177,90 +201,10 @@ export class StockAnalysisService {
     date: string, 
     timestamps: string[], 
     data: Record<string, unknown>
-  ): Array<{
-    id: string;
-    symbol: string;
-    date: string;
-    segmentStart: string;
-    segmentEnd: string;
-    pointCount: number;
-    x0: number;
-    minPrice: number;
-    maxPrice: number;
-    averagePrice: number;
-    trendDirection: 'UP' | 'DOWN';
-    pointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    originalPointCount: number;
-    pointsInRegion: number;
-    redPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    greenPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    redPointCount: number;
-    greenPointCount: number;
-  }> {
-    const segments: Array<{
-      id: string;
-      symbol: string;
-      date: string;
-      segmentStart: string;
-      segmentEnd: string;
-      pointCount: number;
-      x0: number;
-      minPrice: number;
-      maxPrice: number;
-      averagePrice: number;
-      trendDirection: 'UP' | 'DOWN';
-      pointsData: Array<{
-        timestamp: string;
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        volume: number;
-      }>;
-      originalPointCount: number;
-      pointsInRegion: number;
-      redPointsData: Array<{
-        timestamp: string;
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        volume: number;
-      }>;
-      greenPointsData: Array<{
-        timestamp: string;
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        volume: number;
-      }>;
-      redPointCount: number;
-      greenPointCount: number;
-    }> = [];
-    const segmentDuration = 90; // 90 minutes
-    const maxSegmentsPerDay = 10; // Maximum segments per day
+  ): AnalyzedSegment[] {
+    const segments: AnalyzedSegment[] = [];
+    const segmentDuration = this.INITIAL_SEGMENT_SIZE; // Fenêtre initiale de 16 minutes (1 point = 1 minute)
+    const maxSegmentsPerDay = Number.MAX_SAFE_INTEGER; // Permet de couvrir toute la journée sans coupure artificielle
 
     // Sort timestamps
     timestamps.sort();
@@ -274,17 +218,16 @@ export class StockAnalysisService {
     // Boucle principale : continuer tant qu'on peut créer des segments
     while (currentIndex < timestamps.length && segments.length < maxSegmentsPerDay) {
       // Vérifier qu'il reste assez de points pour un segment minimum
-      if (currentIndex + 6 > timestamps.length) {
+      if (currentIndex + segmentDuration > timestamps.length) {
         break; // Pas assez de points restants
       }
       
       // Prendre une plage initiale de segmentDuration minutes
       const segmentTimestamps = timestamps.slice(currentIndex, currentIndex + segmentDuration);
       
-      if (segmentTimestamps.length < 6) {
-        // Pas assez de points, avancer et continuer
-        currentIndex += stepSize;
-        continue;
+      if (segmentTimestamps.length < segmentDuration) {
+        // Pas assez de points pour la fenêtre initiale, fin de traitement pour la journée
+        break;
       }
       
       // Déterminer la fin de la plage traitée
@@ -318,16 +261,12 @@ export class StockAnalysisService {
         }
         
         // Si on n'a pas assez de points après ajustement, essayer de prendre ce qu'on peut
-        if (effectiveStartTimestamps.length < 6) {
-          // Prendre tous les points disponibles jusqu'à la fin
-          effectiveStartTimestamps = timestamps.slice(actualStartIndex);
-          if (effectiveStartTimestamps.length < 6) {
-            // Pas assez de points, passer à la suite
-            endTimestamp = timestamps[timestamps.length - 1];
-            currentIndex = timestamps.length; // Forcer la fin de la boucle
-            console.log(`[DEBUG] Plus assez de points après ajustement (${effectiveStartTimestamps.length} points)`);
-            break;
-          }
+        if (effectiveStartTimestamps.length < segmentDuration) {
+          // Pas assez de points après ajustement pour respecter la fenêtre initiale
+          endTimestamp = timestamps[timestamps.length - 1];
+          currentIndex = timestamps.length; // Forcer la fin de la boucle
+          console.log(`[DEBUG] Plus assez de points après ajustement (${effectiveStartTimestamps.length} points)`);
+          break;
         }
       }
       
@@ -385,7 +324,7 @@ export class StockAnalysisService {
       }
       
       // Si on est au dernier élément ou qu'il reste moins de 6 points, arrêter
-      if (endTimestampIndex >= timestamps.length - 1 || timestamps.length - endTimestampIndex - 1 < 6) {
+      if (endTimestampIndex >= timestamps.length - 1 || timestamps.length - endTimestampIndex - 1 < segmentDuration) {
         console.log(`[DEBUG] Fin: Plus assez de points après endTimestamp (idx ${endTimestampIndex}, reste ${timestamps.length - endTimestampIndex - 1} points)`);
         break;
       }
@@ -497,52 +436,8 @@ export class StockAnalysisService {
     timestamps: string[], 
     data: Record<string, unknown>,
     availableTimestamps?: string[] // Timestamps disponibles pour l'expansion (par jour)
-  ): {
-    id: string;
-    symbol: string;
-    date: string;
-    segmentStart: string;
-    segmentEnd: string;
-    pointCount: number;
-    x0: number;
-    minPrice: number;
-    maxPrice: number;
-    averagePrice: number;
-    trendDirection: 'UP' | 'DOWN';
-    pointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    originalPointCount: number;
-    pointsInRegion: number;
-    redPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    greenPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    redPointCount: number;
-    greenPointCount: number;
-    blackPointsCount: number;
-    u: number;
-    redPointsFormatted: string;
-    greenPointsFormatted: string;
-  } | null {
-    if (timestamps.length < 6) return null;
+  ): AnalyzedSegment | null {
+    if (timestamps.length < this.MIN_RED_POINTS) return null;
 
     const originalPointCount = timestamps.length;
     
@@ -633,15 +528,13 @@ export class StockAnalysisService {
     
     if (!finalValidation.isValid) {
       // Check for opposite invalid rules (only reason to reject)
-      const deviations = {
-        redPoints: finalRedPoints.length - 6,
-        redPointsMax: finalRedPoints.length - 50,
-        greenPoints: finalGreenPoints.length - 4,
-        pointsInRegion: finalPointsInRegion - 6,
-        pointsInRegionMax: finalPointsInRegion - 50,
-      };
+      const deviationRules = this.buildDeviationRules(
+        finalRedPoints.length,
+        finalGreenPoints.length,
+        finalPointsInRegion
+      );
       
-      if (this.hasOppositeInvalidRules(deviations)) {
+      if (this.hasOppositeInvalidRules(deviationRules)) {
         return null;
       }
       
@@ -674,16 +567,28 @@ export class StockAnalysisService {
     const uRaw = blackPointsCount > 0 ? (finalMaxPrice - finalMinPrice) / blackPointsCount : 0;
     const u = Math.floor(uRaw * 100) / 100; // Tronquer à 2 décimales (pas d'arrondi)
     
+    // Ajuster les valeurs nulles selon la direction pour éviter les zéros stricts dans les tableaux
+    const normalizeZeroValue = (value: number): number => {
+      if (Math.abs(value) < 1e-9) {
+        return finalTrendDirection === 'UP' ? 0.000001 : -0.000001;
+      }
+      return value;
+    };
+    
     // Calculate formatted red points: (close - averagePrice) pour chaque point rouge, en ordre chronologique
     // Format: "price1 price2 price3 ..." (prix en float, séparés par des espaces)
     const redPointsFormatted = finalRedPoints
-      .map(point => (point.close - finalAveragePrice).toFixed(2))
+      .map(point => point.close - finalAveragePrice)
+      .map(normalizeZeroValue)
+      .map(value => value.toFixed(6))
       .join(' ');
     
     // Calculate formatted green points: (close - averagePrice) pour chaque point vert, en ordre chronologique
     // Format: "price1 price2 price3 ..." (prix en float, séparés par des espaces)
     const greenPointsFormatted = finalGreenPoints
-      .map(point => (point.close - finalAveragePrice).toFixed(2))
+      .map(point => point.close - finalAveragePrice)
+      .map(normalizeZeroValue)
+      .map(value => value.toFixed(6))
       .join(' ');
     
     // Debug: Log pour vérifier le calcul (à retirer après validation)
@@ -1066,20 +971,23 @@ export class StockAnalysisService {
     const redCount = redPoints.length;
     const greenCount = greenPoints.length;
     
-    // Check red points count (6-50)
-    if (redCount < 6) {
-      return { isValid: false, reason: `Too few red points: ${redCount} < 6` };
+    // Check red points count (limits configurés)
+    if (redCount < this.MIN_RED_POINTS) {
+      return { isValid: false, reason: `Too few red points: ${redCount} < ${this.MIN_RED_POINTS}` };
     }
-    if (redCount > 50) {
-      return { isValid: false, reason: `Too many red points: ${redCount} > 50` };
-    }
-    
-    // Check green points count (4+)
-    if (greenCount < 4) {
-      return { isValid: false, reason: `Too few green points: ${greenCount} < 4` };
+    if (redCount > this.MAX_RED_POINTS) {
+      return { isValid: false, reason: `Too many red points: ${redCount} > ${this.MAX_RED_POINTS}` };
     }
     
-    // Check points in region (6-50) - use original points if available
+    // Check green points count (limits configurés)
+    if (greenCount < this.MIN_GREEN_POINTS) {
+      return { isValid: false, reason: `Too few green points: ${greenCount} < ${this.MIN_GREEN_POINTS}` };
+    }
+    if (greenCount > this.MAX_GREEN_POINTS) {
+      return { isValid: false, reason: `Too many green points: ${greenCount} > ${this.MAX_GREEN_POINTS}` };
+    }
+    
+    // Check points in region (seuil minimum) - use original points if available
     const pointsToCheck = originalPoints || redPoints;
     const pointsInRegion = pointsToCheck.filter(point => {
       if (trendDirection === 'UP') {
@@ -1090,11 +998,11 @@ export class StockAnalysisService {
     }).length;
     
     
-    if (pointsInRegion < 6) {
-      return { isValid: false, reason: `Too few points in region: ${pointsInRegion} < 6` };
+    if (pointsInRegion < this.MIN_REGION_POINTS) {
+      return { isValid: false, reason: `Too few points in region: ${pointsInRegion} < ${this.MIN_REGION_POINTS}` };
     }
-    if (pointsInRegion > 50) {
-      return { isValid: false, reason: `Too many points in region: ${pointsInRegion} > 50` };
+    if (pointsInRegion > this.MAX_REGION_POINTS) {
+      return { isValid: false, reason: `Too many points in region: ${pointsInRegion} > ${this.MAX_REGION_POINTS}` };
     }
     
     return { isValid: true, reason: 'All validation criteria met' };
@@ -1163,19 +1071,13 @@ export class StockAnalysisService {
       }).length;
       
       // Calculate all deviations
-      const deviations = {
-        redPoints: redPoints.length - 6, // Target: 6, deviation from min
-        redPointsMax: redPoints.length - 50, // Target: max 50
-        greenPoints: greenPoints.length - 4, // Target: 4, deviation from min
-        pointsInRegion: pointsInRegion - 6, // Target: 6, deviation from min
-        pointsInRegionMax: pointsInRegion - 50, // Target: max 50
-      };
+      const deviationRules = this.buildDeviationRules(redPoints.length, greenPoints.length, pointsInRegion);
       
       // Find the largest absolute deviation
-      const largestDeviation = this.findLargestDeviation(deviations);
+      const largestDeviation = this.findLargestDeviation(deviationRules);
       
       // Check if we have opposite invalid rules (must reject)
-      if (this.hasOppositeInvalidRules(deviations)) {
+      if (this.hasOppositeInvalidRules(deviationRules)) {
         return null;
       }
       
@@ -1184,10 +1086,13 @@ export class StockAnalysisService {
         return { timestamps: currentTimestamps, redPoints, greenPoints };
       }
       
-      // Calculate adjustment: deviation + 1
-      const adjustment = Math.abs(largestDeviation.value) + 1;
-      const needsExpansion = largestDeviation.value < 0; // Negative means too few
-      const needsReduction = largestDeviation.value > 0; // Positive means too many
+      // Calculate adjustment: exact écart au seuil
+      const adjustment = Math.abs(largestDeviation.value);
+      if (adjustment === 0) {
+        continue;
+      }
+      const needsExpansion = largestDeviation.type === 'min'; // Règle minimale non respectée
+      const needsReduction = largestDeviation.type === 'max'; // Règle maximale dépassée
       
       
       let newTimestamps: string[];
@@ -1221,7 +1126,7 @@ export class StockAnalysisService {
       }
       
       // Ensure we maintain minimum points
-      if (newTimestamps.length < 6) {
+      if (newTimestamps.length < this.MIN_RED_POINTS) {
         break;
       }
       
@@ -1234,67 +1139,79 @@ export class StockAnalysisService {
   }
 
   /**
+   * Build deviation rules (écarts aux contraintes) pour un segment donné
+   */
+  private buildDeviationRules(
+    redPointsCount: number,
+    greenPointsCount: number,
+    pointsInRegion: number
+  ): DeviationRule[] {
+    return [
+      {
+        name: 'redMin',
+        value: redPointsCount - this.MIN_RED_POINTS,
+        type: 'min',
+        active: true
+      },
+      {
+        name: 'redMax',
+        value: redPointsCount - this.MAX_RED_POINTS,
+        type: 'max',
+        active: true
+      },
+      {
+        name: 'greenMin',
+        value: greenPointsCount - this.MIN_GREEN_POINTS,
+        type: 'min',
+        active: true
+      },
+      {
+        name: 'greenMax',
+        value: greenPointsCount - this.MAX_GREEN_POINTS,
+        type: 'max',
+        active: true
+      },
+      {
+        name: 'regionMin',
+        value: pointsInRegion - this.MIN_REGION_POINTS,
+        type: 'min',
+        active: true
+      },
+      {
+        name: 'regionMax',
+        value: pointsInRegion - this.MAX_REGION_POINTS,
+        type: 'max',
+        active: true
+      }
+    ];
+  }
+  
+  /**
    * Find the largest deviation across all rules
    */
-  private findLargestDeviation(deviations: {
-    redPoints: number;
-    redPointsMax: number;
-    greenPoints: number;
-    pointsInRegion: number;
-    pointsInRegionMax: number;
-  }): { name: string; value: number } | null {
-    // Check for invalid rules (negative for min, positive for max)
-    const violations = [
-      { name: 'redPoints', value: deviations.redPoints, isViolation: deviations.redPoints < 0 },
-      { name: 'redPointsMax', value: deviations.redPointsMax, isViolation: deviations.redPointsMax > 0 },
-      { name: 'greenPoints', value: deviations.greenPoints, isViolation: deviations.greenPoints < 0 },
-      { name: 'pointsInRegion', value: deviations.pointsInRegion, isViolation: deviations.pointsInRegion < 0 },
-      { name: 'pointsInRegionMax', value: deviations.pointsInRegionMax, isViolation: deviations.pointsInRegionMax > 0 },
-    ];
+  private findLargestDeviation(rules: DeviationRule[]): DeviationRule | null {
+    const violations = rules.filter(rule => rule.active && (
+      (rule.type === 'min' && rule.value < 0) ||
+      (rule.type === 'max' && rule.value > 0)
+    ));
     
-    // Filter only violations
-    const violationsOnly = violations.filter(v => v.isViolation);
-    
-    if (violationsOnly.length === 0) {
-      return null; // All rules satisfied
+    if (violations.length === 0) {
+      return null;
     }
     
-    // Find the one with the largest absolute deviation
-    let largest = violationsOnly[0];
-    for (const v of violationsOnly) {
-      if (Math.abs(v.value) > Math.abs(largest.value)) {
-        largest = v;
-      }
-    }
-    
-    return { name: largest.name, value: largest.value };
+    return violations.reduce((largest, current) => {
+      return Math.abs(current.value) > Math.abs(largest.value) ? current : largest;
+    }, violations[0]);
   }
-
+  
   /**
-   * Check if we have opposite invalid rules (e.g., too many red points AND too few region points)
+   * Check if we have opposite invalid rules (min et max en conflit sur le même jeu de points)
    */
-  private hasOppositeInvalidRules(deviations: {
-    redPoints: number;
-    redPointsMax: number;
-    greenPoints: number;
-    pointsInRegion: number;
-    pointsInRegionMax: number;
-  }): boolean {
-    // Check for opposite violations:
-    // - Too many redPointsMax (positive) AND too few redPoints (negative)
-    // - Too many pointsInRegionMax (positive) AND too few pointsInRegion (negative)
+  private hasOppositeInvalidRules(rules: DeviationRule[]): boolean {
+    const minViolations = rules.filter(rule => rule.active && rule.type === 'min' && rule.value < 0);
+    const maxViolations = rules.filter(rule => rule.active && rule.type === 'max' && rule.value > 0);
     
-    const hasTooManyRedAndTooFewRed = deviations.redPointsMax > 0 && deviations.redPoints < 0;
-    const hasTooManyRegionAndTooFewRegion = deviations.pointsInRegionMax > 0 && deviations.pointsInRegion < 0;
-    
-    // Also check cross-violations that conflict
-    const hasTooManyRedButTooFewRegion = deviations.redPointsMax > 0 && deviations.pointsInRegion < 0;
-    const hasTooManyRegionButTooFewRed = deviations.pointsInRegionMax > 0 && deviations.redPoints < 0;
-    
-    return hasTooManyRedAndTooFewRed || 
-           hasTooManyRegionAndTooFewRegion || 
-           hasTooManyRedButTooFewRegion || 
-           hasTooManyRegionButTooFewRed;
+    return minViolations.length > 0 && maxViolations.length > 0;
   }
 
   /**
@@ -1316,174 +1233,9 @@ export class StockAnalysisService {
   }
 
   /**
-   * Calculate how many points to remove based on validation error
-   */
-  private calculatePointsToRemove(
-    timestamps: string[], 
-    validation: { isValid: boolean; reason: string }
-  ): number {
-    if (validation.reason.includes('Too many red points')) {
-      const match = validation.reason.match(/(\d+) > 50/);
-      if (match) {
-        const excess = parseInt(match[1]) - 50;
-        return Math.min(excess + 1, Math.floor(timestamps.length * 0.3)); // Cap at 30% removal
-      }
-    }
-    
-    if (validation.reason.includes('Too many points in region')) {
-      const match = validation.reason.match(/(\d+) > 50/);
-      if (match) {
-        const excess = parseInt(match[1]) - 50;
-        // Be more aggressive: remove at least excess points, but preferably more
-        // Since removing points doesn't guarantee removing points from region,
-        // we need to remove proportionally more
-        const totalPoints = timestamps.length;
-        const regionRatio = excess / totalPoints; // How many points are in excess region
-        // Remove more than excess to account for non-region points being removed
-        const aggressiveRemoval = Math.max(excess * 2, Math.ceil(totalPoints * regionRatio * 2));
-        return Math.min(aggressiveRemoval, Math.floor(timestamps.length * 0.5)); // Cap at 50% removal
-      }
-    }
-    
-    if (validation.reason.includes('Too few red points')) {
-      return Math.max(1, Math.floor(timestamps.length * 0.1));
-    }
-    
-    if (validation.reason.includes('Too few green points')) {
-      return Math.max(1, Math.floor(timestamps.length * 0.1));
-    }
-    
-    if (validation.reason.includes('Too few points in region')) {
-      return Math.max(1, Math.floor(timestamps.length * 0.1));
-    }
-    
-    // Default: remove 20% of points
-    return Math.max(1, Math.floor(timestamps.length * 0.2));
-  }
-
-  /**
-   * Truncate data intelligently to maintain continuity
-   */
-  private truncateDataIntelligently(
-    timestamps: string[],
-    prices: number[],
-    pointsToRemove: number,
-    reason: string,
-    averagePrice?: number,
-    trendDirection?: 'UP' | 'DOWN'
-  ): { newTimestamps: string[]; newPrices: number[] } {
-    // If we have too many points in region, try to remove points that are actually in the region
-    if (reason.includes('Too many points in region') && averagePrice !== undefined && trendDirection) {
-      // Identify which points are in the region
-      const pointsInRegionIndices: number[] = [];
-      for (let i = 0; i < prices.length; i++) {
-        if (trendDirection === 'UP' && prices[i] > averagePrice) {
-          pointsInRegionIndices.push(i);
-        } else if (trendDirection === 'DOWN' && prices[i] < averagePrice) {
-          pointsInRegionIndices.push(i);
-        }
-      }
-      
-      // If we have enough region points to remove, prioritize removing them
-      if (pointsInRegionIndices.length > pointsToRemove) {
-        // Remove from both ends of region points
-        const removeFromEnd = Math.floor(pointsToRemove * 0.8);
-        const removeFromStart = pointsToRemove - removeFromEnd;
-        
-        // Get indices to remove (from end and start of region)
-        const indicesToRemove = new Set<number>();
-        // Remove from end of region
-        for (let i = 0; i < removeFromEnd && i < pointsInRegionIndices.length; i++) {
-          indicesToRemove.add(pointsInRegionIndices[pointsInRegionIndices.length - 1 - i]);
-        }
-        // Remove from start of region
-        for (let i = 0; i < removeFromStart && i < pointsInRegionIndices.length; i++) {
-          indicesToRemove.add(pointsInRegionIndices[i]);
-        }
-        
-        // Create new arrays excluding removed indices
-        const newTimestamps = timestamps.filter((_, idx) => !indicesToRemove.has(idx));
-        const newPrices = prices.filter((_, idx) => !indicesToRemove.has(idx));
-        
-        return { newTimestamps, newPrices };
-      }
-    }
-    
-    // Fallback: If we have too many points in region, remove from both ends
-    if (reason.includes('Too many points in region')) {
-      const removeFromEnd = Math.floor(pointsToRemove * 0.8);
-      const removeFromStart = pointsToRemove - removeFromEnd;
-      
-      let newTimestamps = timestamps;
-      let newPrices = prices;
-      
-      if (removeFromEnd > 0) {
-        newTimestamps = newTimestamps.slice(0, newTimestamps.length - removeFromEnd);
-        newPrices = newPrices.slice(0, newPrices.length - removeFromEnd);
-      }
-      
-      if (removeFromStart > 0) {
-        newTimestamps = newTimestamps.slice(removeFromStart);
-        newPrices = newPrices.slice(removeFromStart);
-      }
-      
-      return { newTimestamps, newPrices };
-    }
-    
-    // For other cases (too many red points), remove from the beginning
-    const newTimestamps = timestamps.slice(pointsToRemove);
-    const newPrices = prices.slice(pointsToRemove);
-    return { newTimestamps, newPrices };
-  }
-
-  /**
    * Save analysis results to database
    */
-  async saveAnalysisResults(segments: Array<{
-    id: string;
-    symbol: string;
-    date: string;
-    segmentStart: string;
-    segmentEnd: string;
-    pointCount: number;
-    x0: number;
-    minPrice: number;
-    maxPrice: number;
-    averagePrice: number;
-    trendDirection: 'UP' | 'DOWN';
-    pointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    originalPointCount: number;
-    pointsInRegion: number;
-    redPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    greenPointsData: Array<{
-      timestamp: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-    }>;
-    redPointCount: number;
-    greenPointCount: number;
-    blackPointsCount: number;
-    u: number;
-    redPointsFormatted: string;
-    greenPointsFormatted: string;
-  }>, stockDataId: string): Promise<number> {
+  async saveAnalysisResults(segments: AnalyzedSegment[], stockDataId: string): Promise<number> {
     const { createAnalysisResultImage } = await import('./chartImageGenerator');
     let savedCount = 0;
     
@@ -1589,52 +1341,6 @@ export class StockAnalysisService {
     return savedCount;
   }
 
-  /**
-   * Process a stock symbol (fetch data and run analysis)
-   */
-  /**
-   * Remove redundant points from price data:
-   * 1. For plateaus: Removes middle point of 3 consecutive identical prices
-   * 2. For constant derivatives: Removes middle point of 3 consecutive points with same rate of change
-   * 
-   * @param timestamps Array of timestamp strings
-   * @param prices Array of price values corresponding to timestamps
-   * @returns Array of indices to keep
-   */
-  private removeRedundantPoints(timestamps: string[], prices: number[]): number[] {
-    if (prices.length < 3) return Array.from({ length: prices.length }, (_, index) => index);
-    
-    // Keep track of which indices to keep (start with all)
-    const indicesToKeep = Array.from({ length: prices.length }, () => true);
-    
-    // Check for plateaus and constant derivatives
-    for (let i = 0; i < prices.length - 2; i++) {
-      // Check for plateau (3 identical prices)
-      if (prices[i] === prices[i+1] && prices[i+1] === prices[i+2]) {
-        // Mark the middle point to be removed
-        indicesToKeep[i+1] = false;
-        // Skip the next point as we've already processed it as part of this plateau
-        i++;
-        continue;
-      }
-      
-      // Check for constant derivative
-      const derivative1 = prices[i+1] - prices[i];
-      const derivative2 = prices[i+2] - prices[i+1];
-      
-      // If derivatives are very close (accounting for floating point precision)
-      if (Math.abs(derivative1 - derivative2) < 0.0001) {
-        // Mark the middle point to be removed
-        indicesToKeep[i+1] = false;
-        // Skip the next point as we've already processed it as part of this segment
-        i++;
-      }
-    }
-    
-    // Create a new array with only the points we want to keep
-    return prices.map((_, index) => index).filter(index => indicesToKeep[index]);
-  
-  }
 }
 
 

@@ -22,7 +22,12 @@ export default function ExportClassifiedCsvButton() {
       const response = await fetch('/api/export-classified-csv');
       
       if (!response.ok) {
+        // Gestion fonctionnelle : informer l'utilisateur lorsqu'aucune donnée n'est disponible sans remonter une erreur.
         const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        if (response.status === 404) {
+          alert(errorData.error || 'Aucune donnée classée disponible pour le moment.');
+          return;
+        }
         throw new Error(errorData.error || 'Erreur lors de la génération du CSV');
       }
 

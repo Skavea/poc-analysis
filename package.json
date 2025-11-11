@@ -14,6 +14,7 @@
     "db:push": "drizzle-kit push",
     "migrate:neon": "tsx scripts/migrate-neon-direct.ts",
     "regenerate:all": "tsx scripts/regenerate-all-markets.ts",
+    "regenerate:segments": "tsx scripts/regenerate-segments-from-stock-data.ts",
     "add:new-markets": "tsx scripts/add-new-markets.ts",
     "test:single": "tsx scripts/test-single-market.ts",
     "generate:images": "tsx scripts/generate-segment-images.ts"
