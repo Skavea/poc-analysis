@@ -3,15 +3,17 @@
  * =================================
  * 
  * Endpoint pour exporter les données classées au format CSV
- * Format: 4 lignes par entrée classée
+ * Format: 5 lignes par entrée classée
  * - Ligne 1: "<a> <b> <c> <id> <heure_fin>" où a=0 si R, 1 si V; b=0 si DOWN, 1 si UP; c=valeur de u; id=identifiant du segment; heure_fin=heure de fin au format HH:MM (heure française)
  * - Ligne 2: red_points_formatted
  * - Ligne 3: green_points_formatted
- * - Ligne 4: vide
+ * - Ligne 4: prix des 30 prochains points (x0 en premier, suivi des 30 prochains prix séparés par des espaces)
+ * - Ligne 5: vide
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/db';
+import { AnalysisResult } from '@/lib/schema';
 
 /**
  * Formate l'heure de fin du segment en format français HH:MM
@@ -31,16 +33,13 @@ function formatFrenchTime(date: Date | string): string {
 
 /**
  * Génère le contenu CSV à partir des résultats classés
+ * @param results Résultats classés avec les informations nécessaires
+ * @param next30PointsMap Map des 30 prochains points par segment ID
  */
-function generateCSVContent(results: Array<{
-  id: string;
-  schemaType: string;
-  trendDirection: string;
-  u: number | null;
-  redPointsFormatted: string | null;
-  greenPointsFormatted: string | null;
-  segmentEnd: Date | string;
-}>): string {
+function generateCSVContent(
+  results: AnalysisResult[],
+  next30PointsMap: Map<string, number[]>
+): string {
   const lines: string[] = [];
 
   for (const result of results) {
@@ -66,7 +65,55 @@ function generateCSVContent(results: Array<{
     // Ligne 3: green_points_formatted (ou vide si null)
     lines.push(result.greenPointsFormatted ?? '');
     
-    // Ligne 4: vide
+    // Ligne 4: prix des 30 prochains points (x0 en premier, suivi des 30 prochains prix)
+    const next30Points = next30PointsMap.get(result.id) || [];
+    // x0 est de type decimal (string) dans Drizzle, donc on doit le convertir en number
+    const x0Value = typeof result.x0 === 'string' ? parseFloat(result.x0) : Number(result.x0);
+    
+    // Vérifier que x0Value est valide (pas NaN, undefined ou null)
+    if (isNaN(x0Value) || x0Value === null || x0Value === undefined) {
+      console.warn(`Valeur x0 invalide pour le segment ${result.id}: ${result.x0}`);
+      // Utiliser 0 comme valeur par défaut si x0 est invalide
+      const defaultX0 = 0;
+      const allPrices = [defaultX0, ...next30Points.filter(p => p != null && !isNaN(p))];
+      const formattedPrices = allPrices
+        .map(price => (price || 0).toFixed(6))
+        .join(' ');
+      lines.push(formattedPrices);
+    } else {
+      // Formater les prix : x0 suivi des 30 prochains prix, tous séparés par des espaces
+      // Normaliser les valeurs zéro à 0.0 pour la cohérence
+      const normalizeZeroValue = (value: number): number => {
+        // Vérifier que la valeur est valide avant de la normaliser
+        if (value == null || isNaN(value)) {
+          return 0;
+        }
+        return Math.abs(value) < 1e-10 ? 0 : value;
+      };
+      
+      // Filtrer les valeurs invalides et normaliser
+      const validNextPoints = next30Points
+        .filter(p => p != null && !isNaN(p))
+        .map(normalizeZeroValue);
+      
+      const allPrices = [
+        normalizeZeroValue(x0Value),
+        ...validNextPoints
+      ];
+      
+      // Formater chaque prix avec 6 décimales
+      const formattedPrices = allPrices
+        .map(price => {
+          // Double vérification pour éviter les erreurs
+          const validPrice = price != null && !isNaN(price) ? price : 0;
+          return validPrice.toFixed(6);
+        })
+        .join(' ');
+      
+      lines.push(formattedPrices);
+    }
+    
+    // Ligne 5: vide
     lines.push('');
   }
 
@@ -85,8 +132,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Générer le contenu CSV
-    const csvContent = generateCSVContent(classifiedResults);
+    // Récupérer les 30 prochains points pour chaque segment
+    // Créer une map pour stocker les résultats par segment ID
+    const next30PointsMap = new Map<string, number[]>();
+
+    // Parcourir tous les segments et récupérer les 30 prochains points
+    for (const result of classifiedResults) {
+      try {
+        const next30Points = await DatabaseService.getNext30Points(
+          result.symbol,
+          result.segmentEnd,
+          result.date
+        );
+        next30PointsMap.set(result.id, next30Points);
+      } catch (error) {
+        console.error(`Erreur lors de la récupération des 30 prochains points pour le segment ${result.id}:`, error);
+        // En cas d'erreur, utiliser un tableau vide
+        next30PointsMap.set(result.id, []);
+      }
+    }
+
+    // Générer le contenu CSV avec les 30 prochains points
+    const csvContent = generateCSVContent(classifiedResults, next30PointsMap);
 
     // Créer la réponse avec le contenu CSV
     const response = new NextResponse(csvContent, {

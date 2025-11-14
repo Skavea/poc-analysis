@@ -135,6 +135,179 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * Récupère les 30 prochains points (prix) après la fin d'un segment
+   * Utilise toutes les données stock_data pour le symbole donné
+   * Si le segment se termine en fin de journée, ne récupère que les points de la même journée
+   * @param symbol Symbole du marché (ex: AAPL)
+   * @param segmentEnd Timestamp de fin du segment
+   * @param segmentDate Date du segment (format YYYY-MM-DD)
+   * @returns Tableau des prix (close) des 30 prochains points, ou tableau vide si moins de 30 points disponibles
+   */
+  static async getNext30Points(symbol: string, segmentEnd: Date | string, segmentDate: string): Promise<number[]> {
+    try {
+      // Convertir segmentEnd en Date si c'est une string
+      const segmentEndDate = typeof segmentEnd === 'string' ? new Date(segmentEnd) : segmentEnd;
+      
+      // Extraire la date du segment_end (format YYYY-MM-DD)
+      const segmentEndDateStr = segmentEndDate.toISOString().split('T')[0];
+      
+      // Extraire jour, heure et minute du segment_end pour la comparaison
+      const segmentEndYear = segmentEndDate.getUTCFullYear();
+      const segmentEndMonth = segmentEndDate.getUTCMonth();
+      const segmentEndDay = segmentEndDate.getUTCDate();
+      const segmentEndHour = segmentEndDate.getUTCHours();
+      const segmentEndMinute = segmentEndDate.getUTCMinutes();
+      
+      // Déterminer si on est en fin de journée
+      // Les marchés US ferment généralement à 16h00 heure locale (EST/EDT)
+      // On considère qu'on est en fin de journée si on est après 15h30 heure locale
+      // Pour simplifier, on vérifie l'heure UTC (les données sont généralement en UTC)
+      // Les marchés US sont UTC-5 (EST) ou UTC-4 (EDT), donc 15h30 EST = 20h30 UTC, 15h30 EDT = 19h30 UTC
+      // On considère qu'on est en fin de journée si on est après 19h30 UTC (15h30 EDT) ou 20h30 UTC (15h30 EST)
+      const isEndOfDay = segmentEndHour >= 19 && segmentEndMinute >= 30;
+      
+      // Si on est en fin de journée, ne récupérer que les données de la même date
+      // Sinon, récupérer toutes les données pour le symbole (peut inclure plusieurs jours)
+      const stockDataQuery = isEndOfDay
+        ? this.db
+            .select({
+              data: schema.stockData.data,
+              date: schema.stockData.date
+            })
+            .from(schema.stockData)
+            .where(
+              and(
+                eq(schema.stockData.symbol, symbol.toUpperCase()),
+                eq(schema.stockData.date, segmentDate)
+              )
+            )
+        : this.db
+            .select({
+              data: schema.stockData.data,
+              date: schema.stockData.date
+            })
+            .from(schema.stockData)
+            .where(eq(schema.stockData.symbol, symbol.toUpperCase()))
+            .orderBy(schema.stockData.date);
+
+      const allStockData = await stockDataQuery;
+
+      if (allStockData.length === 0) {
+        return [];
+      }
+
+      // Collecter tous les points avec leurs timestamps
+      const allPoints: Array<{ timestamp: string; close: number }> = [];
+      
+      // Log pour débogage
+      console.log(`[getNext30Points] Recherche pour ${symbol}, segmentEnd: ${segmentEndDate.toISOString()}, date: ${segmentDate}`);
+      console.log(`[getNext30Points] segmentEndYear: ${segmentEndYear}, Month: ${segmentEndMonth}, Day: ${segmentEndDay}, Hour: ${segmentEndHour}, Minute: ${segmentEndMinute}`);
+      console.log(`[getNext30Points] Nombre d'entrées stock_data: ${allStockData.length}`);
+
+      for (const stockData of allStockData) {
+        // Les données dans stock_data utilisent les clés '1. open', '2. high', '3. low', '4. close', '5. volume'
+        const data = stockData.data as Record<string, Record<string, unknown>>;
+        
+        let pointsInThisData = 0;
+        let pointsAfterSegment = 0;
+
+        // Parcourir tous les points de cette entrée stock_data
+        for (const [timestamp, pointData] of Object.entries(data)) {
+          try {
+            const pointDate = new Date(timestamp);
+            
+            // Vérifier que la conversion est valide (pas NaN)
+            if (isNaN(pointDate.getTime())) {
+              console.warn(`Timestamp invalide ignoré: ${timestamp}`);
+              continue;
+            }
+            
+            // Extraire le prix close depuis les données (clé '4. close')
+            const closePrice = parseFloat((pointData['4. close'] as string) || (pointData['close'] as string) || '0');
+            
+            if (isNaN(closePrice)) {
+              console.warn(`Prix close invalide pour le timestamp ${timestamp}`);
+              continue;
+            }
+            
+            pointsInThisData++;
+            
+            // Extraire jour, heure et minute du point
+            const pointYear = pointDate.getUTCFullYear();
+            const pointMonth = pointDate.getUTCMonth();
+            const pointDay = pointDate.getUTCDate();
+            const pointHour = pointDate.getUTCHours();
+            const pointMinute = pointDate.getUTCMinutes();
+            
+            // Si on est en fin de journée, ne garder que les points de la même date
+            if (isEndOfDay) {
+              if (pointYear !== segmentEndYear || pointMonth !== segmentEndMonth || pointDay !== segmentEndDay) {
+                continue;
+              }
+            }
+            
+            // Comparer jour, heure et minute (ignorer les secondes)
+            // Un point est valide s'il est strictement après segment_end au niveau de la minute
+            let isAfter = false;
+            
+            // Comparer d'abord le jour
+            if (pointYear > segmentEndYear) {
+              isAfter = true;
+            } else if (pointYear === segmentEndYear) {
+              if (pointMonth > segmentEndMonth) {
+                isAfter = true;
+              } else if (pointMonth === segmentEndMonth) {
+                if (pointDay > segmentEndDay) {
+                  isAfter = true;
+                } else if (pointDay === segmentEndDay) {
+                  // Même jour : comparer heure et minute
+                  if (pointHour > segmentEndHour) {
+                    isAfter = true;
+                  } else if (pointHour === segmentEndHour) {
+                    // Même heure : comparer minute (strictement après)
+                    if (pointMinute > segmentEndMinute) {
+                      isAfter = true;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Ajouter le point s'il est après segment_end
+            if (isAfter) {
+              pointsAfterSegment++;
+              allPoints.push({
+                timestamp,
+                close: closePrice
+              });
+            }
+          } catch (error) {
+            console.warn(`Erreur lors du traitement du timestamp ${timestamp}:`, error);
+            continue;
+          }
+        }
+        
+        if (pointsInThisData > 0) {
+          console.log(`[getNext30Points] Entrée stock_data date ${stockData.date}: ${pointsInThisData} points totaux, ${pointsAfterSegment} points après segment_end`);
+        }
+      }
+      
+      console.log(`[getNext30Points] Total points trouvés après segment_end: ${allPoints.length}`);
+
+      // Trier par timestamp pour garantir l'ordre chronologique
+      allPoints.sort((a, b) => {
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      });
+
+      // Prendre les 30 premiers points
+      return allPoints.slice(0, 30).map(point => point.close);
+    } catch (error) {
+      console.error('Error fetching next 30 points:', error);
+      return [];
+    }
+  }
+
   static async getAllStockData(): Promise<StockDataSummary[]> {
     try {
       return await this.db

@@ -28,9 +28,11 @@ interface ClassificationStats {
   totalClassified: number;
   totalUnclassified: number;
   rClassified: number;
+  vClassified: number; // Nombre total de segments classifiés en V
   patternPointsReferenced: number;
   hasUnclassified: boolean;
   nextUnclassifiedId?: string;
+  totalInvalid: number; // Nombre total de segments invalides parmi tous les segments
 }
 
 async function getClassificationStats(): Promise<ClassificationStats> {
@@ -48,9 +50,15 @@ async function getClassificationStats(): Promise<ClassificationStats> {
   
   const rClassified = allResults.filter(r => r.schemaType === 'R').length;
   
+  // Compter le nombre total de segments classifiés en V
+  const vClassified = allResults.filter(r => r.schemaType === 'V').length;
+  
   const patternPointsReferenced = allResults.filter(r => 
     r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== ''
   ).length;
+  
+  // Compter le nombre total de segments invalides parmi tous les segments
+  const totalInvalid = allResults.filter(r => r.invalid === true).length;
   
   const unclassifiedResults = allResults.filter(r => 
     r.schemaType === 'UNCLASSIFIED' && 
@@ -63,9 +71,11 @@ async function getClassificationStats(): Promise<ClassificationStats> {
     totalClassified,
     totalUnclassified,
     rClassified,
+    vClassified,
     patternPointsReferenced,
     hasUnclassified: totalUnclassified > 0,
-    nextUnclassifiedId
+    nextUnclassifiedId,
+    totalInvalid
   };
 }
 
@@ -116,6 +126,16 @@ export default async function ClassificationStatus() {
                       </Text>
                     </HStack>
                   </HStack>
+                  {/* Afficher le nombre de segments invalides sous Unclassified */}
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">Invalid segments:</Text>
+                    <HStack gap={1}>
+                      <AlertCircle size={16} color="var(--chakra-colors-red-500)" />
+                      <Text fontSize="lg" fontWeight="bold" color="red.600">
+                        {stats.totalInvalid}
+                      </Text>
+                    </HStack>
+                  </HStack>
                 </VStack>
               </Card.Body>
             </Card.Root>
@@ -127,6 +147,12 @@ export default async function ClassificationStatus() {
               </Card.Header>
               <Card.Body>
                 <VStack gap={3} align="stretch">
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">V classified:</Text>
+                    <Text fontSize="lg" fontWeight="bold" color="purple.600">
+                      {stats.vClassified}
+                    </Text>
+                  </HStack>
                   <HStack justify="space-between">
                     <Text fontSize="sm" color="fg.muted">R classified:</Text>
                     <Text fontSize="lg" fontWeight="bold" color="red.600">
