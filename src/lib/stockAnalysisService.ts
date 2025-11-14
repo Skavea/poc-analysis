@@ -1233,6 +1233,54 @@ export class StockAnalysisService {
   }
 
   /**
+   * Vérifie si un segment a une chaîne temporelle continue avec un gap maximum d'une minute.
+   * Un segment est valide si tous les points consécutifs dans points_data ont un écart
+   * maximum d'une minute entre eux. On parse les timestamps pour extraire l'heure et les minutes.
+   * 
+   * @param pointsData - Tableau de points avec leurs timestamps
+   * @returns true si le segment est valide (tous les points consécutifs ont un gap <= 1 minute), false sinon
+   */
+  protected isValidSegment(pointsData: Array<{ timestamp: string }>): boolean {
+    if (!pointsData || pointsData.length < 2) {
+      return false;
+    }
+
+    // Trier les points par timestamp pour s'assurer qu'ils sont dans l'ordre chronologique
+    const sortedPoints = [...pointsData].sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    // Fonction helper pour extraire l'heure, les minutes et les secondes d'un timestamp
+    const getTimeComponents = (timestamp: string): { hours: number; minutes: number; seconds: number } => {
+      const date = new Date(timestamp);
+      return {
+        hours: date.getHours(),
+        minutes: date.getMinutes(),
+        seconds: date.getSeconds()
+      };
+    };
+
+    // Vérifier que tous les points consécutifs ont un écart maximum d'une minute
+    for (let i = 0; i < sortedPoints.length - 1; i++) {
+      const current = getTimeComponents(sortedPoints[i].timestamp);
+      const next = getTimeComponents(sortedPoints[i + 1].timestamp);
+      
+      // Calculer la différence en secondes entre les deux timestamps
+      const currentDate = new Date(sortedPoints[i].timestamp);
+      const nextDate = new Date(sortedPoints[i + 1].timestamp);
+      const diffSeconds = (nextDate.getTime() - currentDate.getTime()) / 1000;
+      
+      // Si l'écart entre deux points consécutifs dépasse 60 secondes (1 minute), le segment est invalide
+      if (diffSeconds > 60) {
+        return false;
+      }
+    }
+
+    // Si tous les écarts sont <= 1 minute, le segment est valide
+    return true;
+  }
+
+  /**
    * Save analysis results to database
    */
   async saveAnalysisResults(segments: AnalyzedSegment[], stockDataId: string): Promise<number> {
@@ -1263,6 +1311,10 @@ export class StockAnalysisService {
     
     for (const segment of segments) {
       try {
+        // Vérifier si le segment est valide (a une séquence continue d'une minute)
+        const isValid = this.isValidSegment(segment.pointsData);
+        const isInvalid = !isValid;
+
         // Sauvegarder le segment
         await sql`
           INSERT INTO analysis_results (
@@ -1270,7 +1322,7 @@ export class StockAnalysisService {
             x0, min_price, max_price, average_price, trend_direction, 
             points_data, original_point_count, points_in_region, schema_type,
             red_points_data, green_points_data, red_point_count, green_point_count, black_points_count, u,
-            red_points_formatted, green_points_formatted
+            red_points_formatted, green_points_formatted, invalid
           ) VALUES (
             ${segment.id}, -- "AAPL_2025-01-23_abc123"
             ${stockDataId}, -- exact stock_data.id of the stream
@@ -1295,7 +1347,8 @@ export class StockAnalysisService {
             ${segment.blackPointsCount},
             ${segment.u},
             ${segment.redPointsFormatted},
-            ${segment.greenPointsFormatted}
+            ${segment.greenPointsFormatted},
+            ${isInvalid} -- invalid = true si pas de séquence continue d'une minute
           )
           ON CONFLICT (id) DO NOTHING
         `;

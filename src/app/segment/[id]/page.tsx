@@ -70,6 +70,9 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   const isClassified = analysis.schemaType !== 'UNCLASSIFIED' || 
     (analysis.patternPoint && analysis.patternPoint !== 'UNCLASSIFIED' && analysis.patternPoint !== 'unclassified' && analysis.patternPoint !== 'null' && analysis.patternPoint !== '');
   
+  // Vérifier si le segment est invalide
+  const isInvalid = analysis.invalid === true;
+  
   // Trouver le prochain élément non classifié
   const allResults = await DatabaseService.getAllAnalysisResults();
   const unclassifiedResults = allResults.filter(r => 
@@ -79,7 +82,23 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   const nextUnclassifiedId = unclassifiedResults.length > 0 ? unclassifiedResults[0].id : null;
 
   return (
-    <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap={6} minH="calc(100vh - 200px)">
+    <VStack gap={4} align="stretch">
+      {/* Bandeau rouge pour les segments invalides */}
+      {isInvalid && (
+        <Box
+          bg="red.500"
+          color="white"
+          py={3}
+          px={4}
+          borderRadius="md"
+          textAlign="center"
+          fontWeight="semibold"
+        >
+          ⚠️ Segment invalide : Ce segment contient des gaps de plus d'une minute entre les points consécutifs
+        </Box>
+      )}
+      
+      <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap={6} minH="calc(100vh - 200px)">
       {/* Left Column - Chart */}
       <GridItem>
         <Card.Root>
@@ -281,13 +300,13 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                     Patterns
                   </Text>
                   {/* Debug: {JSON.stringify(analysis.patternPoint)} */}
-                  {analysis.patternPoint === null || analysis.patternPoint === 'UNCLASSIFIED' || analysis.patternPoint === 'unclassified' ? (
-                    <Badge colorPalette="gray" variant="subtle" size="sm">
-                      Unclassified
-                    </Badge>
-                  ) : analysis.patternPoint === '' || analysis.patternPoint === 'null' ? (
+                  {analysis.patternPoint === null || analysis.patternPoint === '' || analysis.patternPoint === 'null' ? (
                     <Badge colorPalette="red" variant="subtle" size="sm">
                       No
+                    </Badge>
+                  ) : analysis.patternPoint === 'UNCLASSIFIED' || analysis.patternPoint === 'unclassified' ? (
+                    <Badge colorPalette="gray" variant="subtle" size="sm">
+                      Unclassified
                     </Badge>
                   ) : (
                     <Text fontSize="sm" fontWeight="semibold" color="#eab308">
@@ -372,6 +391,7 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
         </VStack>
       </GridItem>
     </Grid>
+    </VStack>
   );
 }
 

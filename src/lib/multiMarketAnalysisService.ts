@@ -287,12 +287,16 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
     
     for (const segment of segments) {
       try {
+        // Vérifier si le segment est valide (a une séquence continue d'une minute)
+        const isValid = this.isValidSegment(segment.pointsData);
+        const isInvalid = !isValid;
+
         // Sauvegarder le segment
         await sql`
           INSERT INTO analysis_results (
             id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
             x0, min_price, max_price, average_price, trend_direction, 
-            points_data, original_point_count, points_in_region, schema_type
+            points_data, original_point_count, points_in_region, schema_type, invalid
           ) VALUES (
             ${segment.id}, -- "AAPL_2025-01-23_abc123"
             ${stockDataId}, -- exact stock_data.id of the stream
@@ -309,7 +313,8 @@ export class MultiMarketAnalysisService extends StockAnalysisService {
             ${JSON.stringify(segment.pointsData)},
             ${segment.originalPointCount},
             ${segment.pointsInRegion},
-            'UNCLASSIFIED'
+            'UNCLASSIFIED',
+            ${isInvalid} -- invalid = true si pas de séquence continue d'une minute
           )
           ON CONFLICT (id) DO NOTHING
         `;

@@ -41,6 +41,7 @@ CREATE TABLE analysis_results (
     points_data JSONB,
     original_point_count INTEGER,
     points_in_region INTEGER,
+    invalid BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     
     CONSTRAINT valid_segment_time CHECK (segment_start < segment_end),
@@ -79,3 +80,4 @@ CREATE INDEX idx_analysis_results_trend ON analysis_results(trend_direction);
 CREATE INDEX idx_analysis_results_schema_type ON analysis_results(schema_type);
 CREATE INDEX idx_analysis_results_stock_data_id ON analysis_results(stock_data_id);
 CREATE INDEX idx_analysis_results_created_at ON analysis_results(created_at);
+CREATE INDEX idx_analysis_results_invalid ON analysis_results(invalid);

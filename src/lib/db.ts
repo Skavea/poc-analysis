@@ -328,6 +328,7 @@ export class DatabaseService {
    * Un résultat est considéré comme classé si :
    * - schemaType = 'R' OU 'V'
    * - patternPoint est NULL OU (patternPoint != 'UNDEFINED' ET patternPoint != 'undefined')
+   * - invalid = false (exclut les segments invalides)
    */
   static async getClassifiedAnalysisResults(): Promise<AnalysisResult[]> {
     try {
@@ -345,7 +346,9 @@ export class DatabaseService {
                 ne(schema.analysisResults.patternPoint, 'UNDEFINED'),
                 ne(schema.analysisResults.patternPoint, 'undefined')
               )
-            )
+            ),
+            // Exclure les segments invalides (invalid doit être false)
+            eq(schema.analysisResults.invalid, false)
           )
         )
         .orderBy(desc(schema.analysisResults.schemaType), desc(schema.analysisResults.createdAt));
