@@ -3,12 +3,17 @@
  * =================================
  * 
  * Endpoint pour exporter les données classées au format CSV
- * Format: 5 lignes par entrée classée
- * - Ligne 1: "<a> <b> <c> <id> <heure_fin>" où a=0 si R, 1 si V; b=0 si DOWN, 1 si UP; c=valeur de u; id=identifiant du segment; heure_fin=heure de fin au format HH:MM (heure française)
- * - Ligne 2: red_points_formatted
- * - Ligne 3: green_points_formatted
- * - Ligne 4: prix des 30 prochains points (x0 en premier, suivi des 30 prochains prix séparés par des espaces)
- * - Ligne 5: vide
+ * Format: CSV classique avec une ligne d'en-tête et une ligne par segment
+ * Colonnes: "ID","R/V","UP/DOWN","u", "Time","Red","Green","Next","Result"
+ * - ID: identifiant du segment
+ * - R/V: 0 si R, 1 si V
+ * - UP/DOWN: 0 si DOWN, 1 si UP
+ * - u: valeur de u
+ * - Time: heure de fin au format HH:MM (heure française)
+ * - Red: red_points_formatted
+ * - Green: green_points_formatted
+ * - Next: prix des 30 prochains points (x0 en premier, suivi des 30 prochains prix séparés par des espaces)
+ * - Result: vide
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,6 +37,27 @@ function formatFrenchTime(date: Date | string): string {
 }
 
 /**
+ * Échappe une valeur pour le format CSV
+ * @param value Valeur à échapper
+ * @returns Valeur échappée pour CSV
+ */
+function escapeCSVValue(value: string | number | null | undefined): string {
+  if (value == null || value === undefined) {
+    return '';
+  }
+  
+  const str = String(value);
+  
+  // Si la valeur contient des guillemets, des virgules ou des retours à la ligne, l'entourer de guillemets
+  if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+    // Échapper les guillemets en les doublant
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  
+  return str;
+}
+
+/**
  * Génère le contenu CSV à partir des résultats classés
  * @param results Résultats classés avec les informations nécessaires
  * @param next30PointsMap Map des 30 prochains points par segment ID
@@ -41,34 +67,39 @@ function generateCSVContent(
   next30PointsMap: Map<string, number[]>
 ): string {
   const lines: string[] = [];
+  
+  // Ligne d'en-tête
+  lines.push('"ID","R/V","UP/DOWN","u","Time","Red","Green","Next","Result"');
 
   for (const result of results) {
-    // Calculer les valeurs a, b, c
-    // a = 0 si R, 1 si V
-    const a = result.schemaType === 'R' ? 0 : 1;
+    // Calculer les valeurs R/V et UP/DOWN
+    // R/V = 0 si R, 1 si V
+    const rv = result.schemaType === 'R' ? 0 : 1;
     
-    // b = 0 si DOWN, 1 si UP
-    const b = result.trendDirection === 'DOWN' ? 0 : 1;
+    // UP/DOWN = 0 si DOWN, 1 si UP
+    const upDown = result.trendDirection === 'DOWN' ? 0 : 1;
     
-    // c = valeur de u (ou 0 si null)
-    const c = result.u ?? 0;
+    // u = valeur de u (ou 0 si null)
+    const u = result.u ?? 0;
     
     // Formater l'heure de fin du segment en format français HH:MM
-    const endTime = formatFrenchTime(result.segmentEnd);
+    const time = formatFrenchTime(result.segmentEnd);
     
-    // Ligne 1: "<a> <b> <c> <id> <heure_fin>" avec l'ID du segment et l'heure de fin
-    lines.push(`${a} ${b} ${c} ${result.id} ${endTime}`);
+    // ID du segment
+    const id = result.id;
     
-    // Ligne 2: red_points_formatted (ou vide si null)
-    lines.push(result.redPointsFormatted ?? '');
+    // Red: red_points_formatted (ou vide si null)
+    const red = result.redPointsFormatted ?? '';
     
-    // Ligne 3: green_points_formatted (ou vide si null)
-    lines.push(result.greenPointsFormatted ?? '');
+    // Green: green_points_formatted (ou vide si null)
+    const green = result.greenPointsFormatted ?? '';
     
-    // Ligne 4: prix des 30 prochains points (x0 en premier, suivi des 30 prochains prix)
+    // Next: prix des 30 prochains points (x0 en premier, suivi des 30 prochains prix)
     const next30Points = next30PointsMap.get(result.id) || [];
     // x0 est de type decimal (string) dans Drizzle, donc on doit le convertir en number
     const x0Value = typeof result.x0 === 'string' ? parseFloat(result.x0) : Number(result.x0);
+    
+    let next = '';
     
     // Vérifier que x0Value est valide (pas NaN, undefined ou null)
     if (isNaN(x0Value) || x0Value === null || x0Value === undefined) {
@@ -76,10 +107,9 @@ function generateCSVContent(
       // Utiliser 0 comme valeur par défaut si x0 est invalide
       const defaultX0 = 0;
       const allPrices = [defaultX0, ...next30Points.filter(p => p != null && !isNaN(p))];
-      const formattedPrices = allPrices
+      next = allPrices
         .map(price => (price || 0).toFixed(6))
         .join(' ');
-      lines.push(formattedPrices);
     } else {
       // Formater les prix : x0 suivi des 30 prochains prix, tous séparés par des espaces
       // Normaliser les valeurs zéro à 0.0 pour la cohérence
@@ -102,19 +132,32 @@ function generateCSVContent(
       ];
       
       // Formater chaque prix avec 6 décimales
-      const formattedPrices = allPrices
+      next = allPrices
         .map(price => {
           // Double vérification pour éviter les erreurs
           const validPrice = price != null && !isNaN(price) ? price : 0;
           return validPrice.toFixed(6);
         })
         .join(' ');
-      
-      lines.push(formattedPrices);
     }
     
-    // Ligne 5: vide
-    lines.push('');
+    // Result: vide
+    const resultValue = '';
+    
+    // Construire la ligne CSV avec les valeurs échappées
+    const csvLine = [
+      escapeCSVValue(id),
+      escapeCSVValue(rv),
+      escapeCSVValue(upDown),
+      escapeCSVValue(u),
+      escapeCSVValue(time),
+      escapeCSVValue(red),
+      escapeCSVValue(green),
+      escapeCSVValue(next),
+      escapeCSVValue(resultValue)
+    ].join(',');
+    
+    lines.push(csvLine);
   }
 
   return lines.join('\n');

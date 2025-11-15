@@ -907,6 +907,7 @@ export class DatabaseService {
     symbols: string[];
   }> {
     try {
+      // Exclure les segments invalides de toutes les statistiques
       const [stats] = await this.db
         .select({
           totalSegments: sql<number>`count(*)`,
@@ -917,7 +918,8 @@ export class DatabaseService {
           unclassifiedSchemas: sql<number>`count(case when ${schema.analysisResults.schemaType} = 'UNCLASSIFIED' then 1 end)`,
           symbols: sql<string[]>`array_agg(distinct ${schema.analysisResults.symbol})`
         })
-        .from(schema.analysisResults);
+        .from(schema.analysisResults)
+        .where(eq(schema.analysisResults.invalid, false));
       
       return {
         totalSegments: Number(stats.totalSegments),

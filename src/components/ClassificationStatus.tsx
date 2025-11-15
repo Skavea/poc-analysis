@@ -38,29 +38,37 @@ interface ClassificationStats {
 async function getClassificationStats(): Promise<ClassificationStats> {
   const allResults = await DatabaseService.getAllAnalysisResults();
   
-  const totalClassified = allResults.filter(r => 
+  // Compter le nombre total de segments invalides parmi tous les segments
+  const totalInvalid = allResults.filter(r => r.invalid === true).length;
+  
+  // Filtrer les segments valides (exclure les invalides) pour tous les calculs
+  const validResults = allResults.filter(r => r.invalid === false);
+  
+  // Compter les segments classifiés (excluant les invalides)
+  const totalClassified = validResults.filter(r => 
     r.schemaType !== 'UNCLASSIFIED' || 
     (r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== '')
   ).length;
   
-  const totalUnclassified = allResults.filter(r => 
+  // Compter les segments non classifiés (excluant les invalides)
+  const totalUnclassified = validResults.filter(r => 
     r.schemaType === 'UNCLASSIFIED' && 
     (r.patternPoint === null || r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified' || r.patternPoint === 'null' || r.patternPoint === '')
   ).length;
   
-  const rClassified = allResults.filter(r => r.schemaType === 'R').length;
+  // Compter les segments R classifiés (excluant les invalides)
+  const rClassified = validResults.filter(r => r.schemaType === 'R').length;
   
-  // Compter le nombre total de segments classifiés en V
-  const vClassified = allResults.filter(r => r.schemaType === 'V').length;
+  // Compter le nombre total de segments classifiés en V (excluant les invalides)
+  const vClassified = validResults.filter(r => r.schemaType === 'V').length;
   
-  const patternPointsReferenced = allResults.filter(r => 
+  // Compter les pattern points référencés (excluant les invalides)
+  const patternPointsReferenced = validResults.filter(r => 
     r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== ''
   ).length;
   
-  // Compter le nombre total de segments invalides parmi tous les segments
-  const totalInvalid = allResults.filter(r => r.invalid === true).length;
-  
-  const unclassifiedResults = allResults.filter(r => 
+  // Trouver le prochain segment non classifié (excluant les invalides)
+  const unclassifiedResults = validResults.filter(r => 
     r.schemaType === 'UNCLASSIFIED' && 
     (r.patternPoint === null || r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified' || r.patternPoint === 'null' || r.patternPoint === '')
   );

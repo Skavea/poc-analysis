@@ -53,29 +53,31 @@ export default function DashboardPage() {
     ? Math.round((classifiedSegments / totalSegments) * 100) 
     : 0;
   
-  // Group analysis results by symbol
-  const resultsBySymbol = allResults.reduce((acc, result) => {
-    if (!acc[result.symbol]) {
-      acc[result.symbol] = {
-        total: 0,
-        r: 0,
-        v: 0,
-        unclassified: 0
-      };
-    }
-    
-    acc[result.symbol].total += 1;
-    
-    if (result.schemaType === 'R') {
-      acc[result.symbol].r += 1;
-    } else if (result.schemaType === 'V') {
-      acc[result.symbol].v += 1;
-    } else {
-      acc[result.symbol].unclassified += 1;
-    }
-    
-    return acc;
-  }, {} as Record<string, { total: number; r: number; v: number; unclassified: number; }>);
+  // Group analysis results by symbol (excluant les segments invalides)
+  const resultsBySymbol = allResults
+    .filter(result => result.invalid === false) // Exclure les segments invalides
+    .reduce((acc, result) => {
+      if (!acc[result.symbol]) {
+        acc[result.symbol] = {
+          total: 0,
+          r: 0,
+          v: 0,
+          unclassified: 0
+        };
+      }
+      
+      acc[result.symbol].total += 1;
+      
+      if (result.schemaType === 'R') {
+        acc[result.symbol].r += 1;
+      } else if (result.schemaType === 'V') {
+        acc[result.symbol].v += 1;
+      } else {
+        acc[result.symbol].unclassified += 1;
+      }
+      
+      return acc;
+    }, {} as Record<string, { total: number; r: number; v: number; unclassified: number; }>);
   
   return (
     <Navigation
