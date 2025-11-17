@@ -25,6 +25,8 @@ interface PatternClassificationFormProps {
   segmentId: string;
   initialSchemaType: string;
   initialPatternPoint?: string | null;
+  initialMlResult?: 'TRUE' | 'FALSE' | 'UNCLASSIFIED';
+  mlClassed?: boolean;
   pointsData: Array<{
     timestamp: string;
     open: number;
@@ -40,6 +42,8 @@ export default function PatternClassificationForm({
   segmentId, 
   initialSchemaType, 
   initialPatternPoint,
+  initialMlResult = 'UNCLASSIFIED',
+  mlClassed = false,
   pointsData,
   onPointSelect
 }: PatternClassificationFormProps) {
@@ -58,6 +62,10 @@ export default function PatternClassificationForm({
       ? initialPatternPoint 
       : null
   );
+  const [patternDirty, setPatternDirty] = useState(false);
+  const [mlValidation, setMlValidation] = useState<'TRUE' | 'FALSE' | 'UNCLASSIFIED'>(
+    initialMlResult || 'UNCLASSIFIED'
+  );
   const [isUpdating, setIsUpdating] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -65,6 +73,7 @@ export default function PatternClassificationForm({
   const handlePointSelection = useCallback((timestamp: string) => {
     setSelectedPoint(timestamp);
     setIsModalOpen(false);
+    setPatternDirty(true);
     if (onPointSelect) {
       onPointSelect(timestamp);
     }
@@ -91,24 +100,35 @@ export default function PatternClassificationForm({
       setIsUpdating(true);
       
       // Déterminer la valeur finale du pattern point
-      let finalPatternPoint: string | null = null;
-      if (hasPattern === 'yes' && selectedPoint) {
-        finalPatternPoint = selectedPoint;
-      } else if (hasPattern === 'no') {
-        finalPatternPoint = null;
-      } else if (hasPattern === 'unclassified') {
-        // Pour unclassified, on ne met rien (null) - sera géré par le backend
-        finalPatternPoint = null;
+      let finalPatternPoint: string | null | undefined = undefined;
+      if (patternDirty) {
+        if (hasPattern === 'yes' && selectedPoint) {
+          finalPatternPoint = selectedPoint;
+        } else if (hasPattern === 'no') {
+          finalPatternPoint = null;
+        } else if (hasPattern === 'unclassified') {
+          finalPatternPoint = 'unclassified';
+        }
+      }
+
+      const requestBody: Record<string, unknown> = {
+        segmentId,
+        schemaType,
+      };
+
+      if (patternDirty) {
+        requestBody.patternPoint = finalPatternPoint ?? null;
+      }
+
+      // Inclure la validation ML uniquement si le segment est passé par le ML
+      if (mlClassed) {
+        requestBody.mlValidation = mlValidation;
       }
 
       const response = await fetch('/api/update-classification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          segmentId, 
-          schemaType,
-          patternPoint: finalPatternPoint
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
@@ -129,6 +149,10 @@ export default function PatternClassificationForm({
     setSchemaType('UNCLASSIFIED');
     setHasPattern('unclassified');
     setSelectedPoint(null);
+    setPatternDirty(false);
+    if (mlClassed) {
+      setMlValidation('UNCLASSIFIED');
+    }
   };
 
   return (
@@ -148,7 +172,7 @@ export default function PatternClassificationForm({
                 name="pattern" 
                 value="yes" 
                 checked={hasPattern === 'yes'}
-                onChange={(e) => setHasPattern('yes')}
+                onChange={() => { setHasPattern('yes'); setPatternDirty(true); }}
               />
               <label htmlFor="pattern-yes">
                 <HStack gap={2}>
@@ -165,7 +189,7 @@ export default function PatternClassificationForm({
                 name="pattern" 
                 value="no" 
                 checked={hasPattern === 'no'}
-                onChange={(e) => setHasPattern('no')}
+                onChange={() => { setHasPattern('no'); setPatternDirty(true); setSelectedPoint(null); }}
               />
               <label htmlFor="pattern-no">
                 <HStack gap={2}>
@@ -182,7 +206,7 @@ export default function PatternClassificationForm({
                 name="pattern" 
                 value="unclassified" 
                 checked={hasPattern === 'unclassified'}
-                onChange={(e) => setHasPattern('unclassified')}
+                onChange={() => { setHasPattern('unclassified'); setPatternDirty(true); setSelectedPoint(null); }}
               />
               <label htmlFor="pattern-unclassified">
                 <HStack gap={2}>
@@ -269,6 +293,66 @@ export default function PatternClassificationForm({
                   <HStack gap={2}>
                     <Badge colorPalette="gray" variant="subtle" size="sm">UNCLASSIFIED</Badge>
                     <Text fontSize="sm" color="fg.default">Not Classified</Text>
+                  </HStack>
+                </label>
+              </HStack>
+            </VStack>
+          </Field.Root>
+        )}
+
+        {mlClassed && (
+          <Field.Root>
+            <Field.Label fontSize="sm" fontWeight="medium" color="fg.muted" mb={2}>
+              Validation ML
+            </Field.Label>
+            <VStack gap={3} align="stretch">
+              <HStack gap={2}>
+                <input 
+                  type="radio" 
+                  id="ml-yes" 
+                  name="ml-validation" 
+                  value="TRUE" 
+                  checked={mlValidation === 'TRUE'}
+                  onChange={() => setMlValidation('TRUE')}
+                />
+                <label htmlFor="ml-yes">
+                  <HStack gap={2}>
+                    <Badge colorPalette="green" variant="subtle" size="sm">Yes</Badge>
+                    <Text fontSize="sm" color="fg.default">ML correct</Text>
+                  </HStack>
+                </label>
+              </HStack>
+
+              <HStack gap={2}>
+                <input 
+                  type="radio" 
+                  id="ml-no" 
+                  name="ml-validation" 
+                  value="FALSE" 
+                  checked={mlValidation === 'FALSE'}
+                  onChange={() => setMlValidation('FALSE')}
+                />
+                <label htmlFor="ml-no">
+                  <HStack gap={2}>
+                    <Badge colorPalette="red" variant="subtle" size="sm">No</Badge>
+                    <Text fontSize="sm" color="fg.default">Inverser R/V</Text>
+                  </HStack>
+                </label>
+              </HStack>
+
+              <HStack gap={2}>
+                <input 
+                  type="radio" 
+                  id="ml-unclassified" 
+                  name="ml-validation" 
+                  value="UNCLASSIFIED" 
+                  checked={mlValidation === 'UNCLASSIFIED'}
+                  onChange={() => setMlValidation('UNCLASSIFIED')}
+                />
+                <label htmlFor="ml-unclassified">
+                  <HStack gap={2}>
+                    <Badge colorPalette="gray" variant="subtle" size="sm">Reset</Badge>
+                    <Text fontSize="sm" color="fg.default">Revalider plus tard</Text>
                   </HStack>
                 </label>
               </HStack>

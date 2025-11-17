@@ -696,6 +696,7 @@ export class DatabaseService {
     updateData: {
       schemaType?: 'R' | 'V' | 'UNCLASSIFIED';
       patternPoint?: string | null;
+      mlResult?: 'TRUE' | 'FALSE' | 'UNCLASSIFIED';
     }
   ): Promise<boolean> {
     try {
@@ -707,6 +708,10 @@ export class DatabaseService {
       
       if (updateData.patternPoint !== undefined) {
         updateFields.patternPoint = updateData.patternPoint;
+      }
+      
+      if (updateData.mlResult !== undefined) {
+        updateFields.mlResult = updateData.mlResult;
       }
       
       const result = await this.db

@@ -23,6 +23,8 @@
     "@chakra-ui/react": "^3.27.0",
     "@emotion/react": "^11.14.0",
     "@neondatabase/serverless": "^1.0.1",
+    "@tensorflow/tfjs": "^4.21.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.21.0",
     "dotenv": "^17.2.2",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.44.5",

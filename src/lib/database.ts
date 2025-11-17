@@ -35,6 +35,8 @@ export interface AnalysisResult {
   average_price: number;
   trend_direction: 'UP' | 'DOWN';
   schema_type: 'R' | 'V' | 'UNCLASSIFIED';
+  ml_classed: boolean;
+  ml_result: 'TRUE' | 'FALSE' | 'UNCLASSIFIED';
   points_data: Array<{
     timestamp: string;
     open: number;

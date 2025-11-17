@@ -19,6 +19,7 @@ import NextAnalysisHandler from '@/components/NextAnalysisHandler';
 import ClassificationSuccessNotification from '@/components/ClassificationSuccessNotification';
 import ExportChartButton from '@/components/ExportChartButton';
 import SegmentGeneratedImage from '@/components/SegmentGeneratedImage';
+import MlValidationBanner from '@/components/MlValidationBanner';
 import {
   Box,
   VStack,
@@ -72,6 +73,7 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   
   // Vérifier si le segment est invalide
   const isInvalid = analysis.invalid === true;
+  const needsMlValidation = analysis.mlClassed === true && analysis.mlResult === 'UNCLASSIFIED';
   
   // Trouver le prochain élément non classifié
   const allResults = await DatabaseService.getAllAnalysisResults();
@@ -96,6 +98,11 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
         >
           ⚠️ Segment invalide : Ce segment contient des gaps de plus d'une minute entre les points consécutifs
         </Box>
+      )}
+
+      {/* Bandeau orange pour valider les segments ML */}
+      {needsMlValidation && (
+        <MlValidationBanner segmentId={analysis.id} />
       )}
       
       <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap={6} minH="calc(100vh - 200px)">
@@ -217,6 +224,8 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                   segmentId={analysis.id} 
                   initialSchemaType={analysis.schemaType}
                   initialPatternPoint={analysis.patternPoint}
+                  initialMlResult={analysis.mlResult as 'TRUE' | 'FALSE' | 'UNCLASSIFIED'}
+                  mlClassed={analysis.mlClassed}
                   pointsData={pointsData || []}
                 />
               </Card.Body>
@@ -383,6 +392,8 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
                   segmentId={analysis.id} 
                   initialSchemaType={analysis.schemaType}
                   initialPatternPoint={analysis.patternPoint}
+                  initialMlResult={analysis.mlResult as 'TRUE' | 'FALSE' | 'UNCLASSIFIED'}
+                  mlClassed={analysis.mlClassed}
                   pointsData={pointsData || []}
                 />
               </Card.Body>

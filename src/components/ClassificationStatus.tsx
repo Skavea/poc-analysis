@@ -23,6 +23,7 @@ import { BarChart3, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import RegenerateImagesButton from '@/components/RegenerateImagesButton';
 import ExportClassifiedCsvButton from '@/components/ExportClassifiedCsvButton';
+import MlClassificationButton from '@/components/MlClassificationButton';
 
 interface ClassificationStats {
   totalClassified: number;
@@ -33,6 +34,10 @@ interface ClassificationStats {
   hasUnclassified: boolean;
   nextUnclassifiedId?: string;
   totalInvalid: number; // Nombre total de segments invalides parmi tous les segments
+  mlClassifiedTotal: number; // Nombre total classés par ML
+  mlClassifiedCorrect: number; // Nombre ML corrects (mlResult === schemaType)
+  mlClassifiedIncorrect: number; // Nombre ML incorrects (mlResult !== schemaType)
+  mlUnclassifiedTotal: number; // Nombre ML non classés (mlResult = 'UNCLASSIFIED')
 }
 
 async function getClassificationStats(): Promise<ClassificationStats> {
@@ -45,9 +50,12 @@ async function getClassificationStats(): Promise<ClassificationStats> {
   const validResults = allResults.filter(r => r.invalid === false);
   
   // Compter les segments classifiés (excluant les invalides)
+  // Ne pas compter les segments classés par ML (mlClassed = true)
   const totalClassified = validResults.filter(r => 
-    r.schemaType !== 'UNCLASSIFIED' || 
-    (r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== '')
+    r.mlClassed === false && (
+      r.schemaType !== 'UNCLASSIFIED' || 
+      (r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== '')
+    )
   ).length;
   
   // Compter les segments non classifiés (excluant les invalides)
@@ -57,14 +65,36 @@ async function getClassificationStats(): Promise<ClassificationStats> {
   ).length;
   
   // Compter les segments R classifiés (excluant les invalides)
-  const rClassified = validResults.filter(r => r.schemaType === 'R').length;
+  // Ne pas compter ceux classés par ML
+  const rClassified = validResults.filter(r => r.schemaType === 'R' && r.mlClassed === false).length;
   
   // Compter le nombre total de segments classifiés en V (excluant les invalides)
-  const vClassified = validResults.filter(r => r.schemaType === 'V').length;
+  // Ne pas compter ceux classés par ML
+  const vClassified = validResults.filter(r => r.schemaType === 'V' && r.mlClassed === false).length;
   
   // Compter les pattern points référencés (excluant les invalides)
   const patternPointsReferenced = validResults.filter(r => 
     r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== ''
+  ).length;
+  
+  // Compteurs ML (sur segments valides)
+  // Compté uniquement si mlClassed = true ET mlResult ∈ {'R','V'}
+  // Aligné avec la demande: mlClassed = true ET mlResult != 'UNCLASSIFIED'
+  const mlClassifiedTotal = validResults.filter(r => 
+    r.mlClassed === true && r.mlResult !== 'UNCLASSIFIED'
+  ).length;
+  // "Correct" si un schéma humain existe (différent de UNCLASSIFIED) et correspond au résultat ML (R/V)
+  // Aligné avec la demande: mlClassed = true ET mlResult = 'TRUE'
+  const mlClassifiedCorrect = validResults.filter(r => 
+    r.mlClassed === true && (r.mlResult === 'TRUE' || r.mlResult === 'true')
+  ).length;
+  // "Incorrect": mlClassed = true ET mlResult = 'FALSE'
+  const mlClassifiedIncorrect = validResults.filter(r => 
+    r.mlClassed === true && (r.mlResult === 'FALSE' || r.mlResult === 'false')
+  ).length;
+  // ML non classés: mlClassed = true et mlResult = 'UNCLASSIFIED'
+  const mlUnclassifiedTotal = validResults.filter(r =>
+    r.mlClassed === true && r.mlResult === 'UNCLASSIFIED'
   ).length;
   
   // Trouver le prochain segment non classifié (excluant les invalides)
@@ -83,25 +113,31 @@ async function getClassificationStats(): Promise<ClassificationStats> {
     patternPointsReferenced,
     hasUnclassified: totalUnclassified > 0,
     nextUnclassifiedId,
-    totalInvalid
+    totalInvalid,
+    mlClassifiedTotal,
+    mlClassifiedCorrect,
+    mlClassifiedIncorrect,
+    mlUnclassifiedTotal
   };
 }
 
 export default async function ClassificationStatus() {
   const stats = await getClassificationStats();
   
-  // Ne pas afficher le composant s'il n'y a pas d'éléments non classifiés
-  if (!stats.hasUnclassified) {
-    return null;
-  }
+  // Toujours afficher le composant, même s'il n'y a pas d'éléments non classifiés
 
   return (
     <Card.Root>
       <Card.Header>
         <HStack gap={2} align="center">
-          <AlertCircle size={20} color="var(--chakra-colors-orange-500)" />
+          {/* Icône et titre selon l'état de classification */}
+          {stats.hasUnclassified ? (
+            <AlertCircle size={20} color="var(--chakra-colors-orange-500)" />
+          ) : (
+            <CheckCircle size={20} color="var(--chakra-colors-green-500)" />
+          )}
           <Heading size="md" color="fg.default">
-            Classification Status
+            {stats.hasUnclassified ? 'Classification Status' : 'All segments classified'}
           </Heading>
         </HStack>
       </Card.Header>
@@ -131,6 +167,26 @@ export default async function ClassificationStatus() {
                       <AlertCircle size={16} color="var(--chakra-colors-orange-500)" />
                       <Text fontSize="lg" fontWeight="bold" color="orange.600">
                         {stats.totalUnclassified}
+                      </Text>
+                    </HStack>
+                  </HStack>
+                  {/* ML Classified counters */}
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">ML Classified:</Text>
+                    <HStack gap={1}>
+                      <CheckCircle size={16} color="var(--chakra-colors-green-500)" />
+                      <Text fontSize="lg" fontWeight="bold" color="green.600">
+                        {stats.mlClassifiedTotal}
+                      </Text>
+                    </HStack>
+                  </HStack>
+                  {/* ML Unclassified */}
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">ML Unclassified:</Text>
+                    <HStack gap={1}>
+                      <AlertCircle size={16} color="var(--chakra-colors-orange-500)" />
+                      <Text fontSize="lg" fontWeight="bold" color="orange.600">
+                        {stats.mlUnclassifiedTotal}
                       </Text>
                     </HStack>
                   </HStack>
@@ -173,6 +229,19 @@ export default async function ClassificationStatus() {
                       {stats.patternPointsReferenced}
                     </Text>
                   </HStack>
+                  {/* ML correctness details */}
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">ML correct:</Text>
+                    <Text fontSize="lg" fontWeight="bold" color="green.600">
+                      {stats.mlClassifiedCorrect}
+                    </Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">ML incorrect:</Text>
+                    <Text fontSize="lg" fontWeight="bold" color="red.600">
+                      {stats.mlClassifiedIncorrect}
+                    </Text>
+                  </HStack>
                 </VStack>
               </Card.Body>
             </Card.Root>
@@ -212,6 +281,7 @@ export default async function ClassificationStatus() {
                 </Button>
                 <RegenerateImagesButton />
                 <ExportClassifiedCsvButton />
+                <MlClassificationButton />
               </VStack>
             </Card.Body>
           </Card.Root>

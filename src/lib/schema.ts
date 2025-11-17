@@ -41,6 +41,9 @@ export const analysisResults = pgTable('analysis_results', {
   averagePrice: decimal('average_price', { precision: 12, scale: 4 }).notNull(),
   trendDirection: varchar('trend_direction', { length: 10 }).notNull(),
   schemaType: varchar('schema_type', { length: 20 }).default('UNCLASSIFIED').notNull(),
+  // ML classification fields
+  mlClassed: boolean('ml_classed').default(false).notNull(),
+  mlResult: varchar('ml_result', { length: 20 }).default('UNCLASSIFIED').notNull(),
   patternPoint: varchar('pattern_point', { length: 255 }), // Timestamp du point sélectionné ou null
   pointsData: jsonb('points_data'),
   originalPointCount: integer('original_point_count'),

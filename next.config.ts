@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Plus d'externalisation spéciale: on utilise @tensorflow/tfjs (pur JS) côté serveur
 };
 
 export default nextConfig;

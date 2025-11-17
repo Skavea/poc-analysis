@@ -11,29 +11,24 @@ import { DatabaseService } from '@/lib/db';
 import { createAnalysisResultImage } from '@/lib/chartImageGenerator';
 import { neon } from '@neondatabase/serverless';
 
+type SchemaType = 'R' | 'V' | 'UNCLASSIFIED';
+type MlResultType = 'TRUE' | 'FALSE' | 'UNCLASSIFIED';
+
+// Helper pour inverser un schéma R/V
+function invertSchema(schema: SchemaType): SchemaType {
+  if (schema === 'R') return 'V';
+  if (schema === 'V') return 'R';
+  return 'UNCLASSIFIED';
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { segmentId, schemaType, patternPoint } = await request.json();
+    const { segmentId, schemaType, patternPoint, mlValidation } = await request.json();
     
     // Validation des paramètres requis
     if (!segmentId) {
       return NextResponse.json(
         { error: 'Missing segmentId parameter' },
-        { status: 400 }
-      );
-    }
-
-    if (!schemaType || !['R', 'V', 'UNCLASSIFIED'].includes(schemaType)) {
-      return NextResponse.json(
-        { error: 'Invalid schemaType. Must be R, V, or UNCLASSIFIED' },
-        { status: 400 }
-      );
-    }
-
-    // Validation du pattern point
-    if (patternPoint !== null && patternPoint !== 'unclassified' && !patternPoint) {
-      return NextResponse.json(
-        { error: 'Invalid patternPoint. Must be null, "unclassified", or a valid timestamp' },
         { status: 400 }
       );
     }
@@ -47,11 +42,75 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mettre à jour la classification
-    const updateData = {
-      schemaType,
-      patternPoint: patternPoint // null pour "no" ou "unclassified", timestamp pour "yes"
-    };
+    // Normaliser les inputs en réutilisant les valeurs actuelles quand elles sont absentes
+    let targetSchema: SchemaType = (schemaType ?? segmentData.schemaType) as SchemaType;
+    const shouldUpdatePatternPoint = patternPoint !== undefined;
+    let targetPatternPoint: string | null | undefined = shouldUpdatePatternPoint
+      ? (patternPoint as string | null)
+      : undefined;
+    let nextMlResult: MlResultType | undefined;
+    const currentMlResult = (segmentData.mlResult as MlResultType) || 'UNCLASSIFIED';
+
+    // Validation des valeurs finales
+    if (!['R', 'V', 'UNCLASSIFIED'].includes(targetSchema)) {
+      return NextResponse.json(
+        { error: 'Invalid schemaType. Must be R, V, or UNCLASSIFIED' },
+        { status: 400 }
+      );
+    }
+
+    if (
+      shouldUpdatePatternPoint &&
+      targetPatternPoint !== null &&
+      targetPatternPoint !== 'unclassified' &&
+      typeof targetPatternPoint !== 'string'
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid patternPoint. Must be null, "unclassified", or a valid timestamp string' },
+        { status: 400 }
+      );
+    }
+
+    const normalizedMlValidation = mlValidation as MlResultType | undefined;
+
+    if (normalizedMlValidation && !['TRUE', 'FALSE', 'UNCLASSIFIED'].includes(normalizedMlValidation)) {
+      return NextResponse.json(
+        { error: 'Invalid mlValidation. Must be TRUE, FALSE, or UNCLASSIFIED' },
+        { status: 400 }
+      );
+    }
+
+    // Appliquer la logique de validation ML (inverse le schéma si nécessaire)
+    if (normalizedMlValidation === 'FALSE') {
+      if (currentMlResult !== 'FALSE') {
+        targetSchema = invertSchema(segmentData.schemaType as SchemaType);
+      }
+      nextMlResult = 'FALSE';
+    } else if (normalizedMlValidation === 'TRUE') {
+      if (currentMlResult === 'FALSE') {
+        targetSchema = invertSchema(segmentData.schemaType as SchemaType);
+      }
+      nextMlResult = 'TRUE';
+    } else if (normalizedMlValidation === 'UNCLASSIFIED') {
+      nextMlResult = 'UNCLASSIFIED';
+    }
+
+    // Mettre à jour la classification (schema/pattern + ml_result si demandé)
+    const updateData: {
+      schemaType?: SchemaType;
+      patternPoint?: string | null;
+      mlResult?: MlResultType;
+    } = {};
+
+    if (schemaType !== undefined || nextMlResult === 'TRUE' || nextMlResult === 'FALSE' || nextMlResult === 'UNCLASSIFIED') {
+      updateData.schemaType = targetSchema;
+    }
+    if (shouldUpdatePatternPoint) {
+      updateData.patternPoint = targetPatternPoint ?? null;
+    }
+    if (nextMlResult !== undefined) {
+      updateData.mlResult = nextMlResult;
+    }
 
     const success = await DatabaseService.updateAnalysisResult(segmentId, updateData);
     
