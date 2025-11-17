@@ -74,6 +74,7 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
   // Vérifier si le segment est invalide
   const isInvalid = analysis.invalid === true;
   const needsMlValidation = analysis.mlClassed === true && analysis.mlResult === 'UNCLASSIFIED';
+
   
   // Trouver le prochain élément non classifié
   const allResults = await DatabaseService.getAllAnalysisResults();

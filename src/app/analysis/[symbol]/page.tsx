@@ -36,6 +36,8 @@ interface AnalysisPageProps {
     filter?: string;
     schema?: string | string[];
     pattern?: string | string[];
+    mlClassed?: string | string[];
+    mlResult?: string | string[];
     stream?: string;
   }>;
 }
@@ -68,6 +70,11 @@ async function AnalysisStatsServer({
   const patternYesCount = results.filter(r => r.patternPoint && r.patternPoint !== 'UNCLASSIFIED' && r.patternPoint !== 'unclassified' && r.patternPoint !== 'null' && r.patternPoint !== '').length;
   const patternNoCount = results.filter(r => r.patternPoint === null || r.patternPoint === '' || r.patternPoint === 'null').length;
   const patternUnclassifiedCount = results.filter(r => r.patternPoint === 'UNCLASSIFIED' || r.patternPoint === 'unclassified').length;
+  const mlClassedTrueCount = results.filter(r => r.mlClassed === true).length;
+  const mlClassedFalseCount = results.length - mlClassedTrueCount;
+  const mlResultTrueCount = results.filter(r => r.mlResult === 'TRUE').length;
+  const mlResultFalseCount = results.filter(r => r.mlResult === 'FALSE').length;
+  const mlResultUnclassifiedCount = results.filter(r => r.mlResult === 'UNCLASSIFIED').length;
 
   // Nombre correctement classifié: schema classifié OU pattern référencé
   const classifiedCount = results.filter(r => (
@@ -91,6 +98,8 @@ async function AnalysisStatsServer({
 
   const schemaFilters = normalizeFilters(searchParams.schema);
   const patternFilters = normalizeFilters(searchParams.pattern);
+  const mlClassedFilters = normalizeFilters(searchParams.mlClassed);
+  const mlResultFilters = normalizeFilters(searchParams.mlResult);
   
   let filteredResults = results;
   
@@ -112,6 +121,24 @@ async function AnalysisStatsServer({
         return result.patternPoint === 'UNCLASSIFIED' || result.patternPoint === 'unclassified';
       }
       return false;
+    });
+  }
+
+  if (mlClassedFilters.length > 0) {
+    filteredResults = filteredResults.filter(result => {
+      const value = result.mlClassed ? 'true' : 'false';
+      return mlClassedFilters.includes(value);
+    });
+  }
+
+  if (mlResultFilters.length > 0) {
+    filteredResults = filteredResults.filter(result => {
+      const status = result.mlResult === 'TRUE'
+        ? 'good'
+        : result.mlResult === 'FALSE'
+        ? 'wrong'
+        : 'unclassified';
+      return mlResultFilters.includes(status);
     });
   }
 
@@ -213,6 +240,11 @@ async function AnalysisStatsServer({
                   patternYesCount={patternYesCount}
                   patternNoCount={patternNoCount}
                   patternUnclassifiedCount={patternUnclassifiedCount}
+                  mlClassedTrueCount={mlClassedTrueCount}
+                  mlClassedFalseCount={mlClassedFalseCount}
+                  mlResultUnclassifiedCount={mlResultUnclassifiedCount}
+                  mlResultTrueCount={mlResultTrueCount}
+                  mlResultFalseCount={mlResultFalseCount}
                 />
               </Card.Body>
             </Card.Root>
@@ -273,6 +305,16 @@ async function AnalysisStatsServer({
                         >
                           {result.schemaType === 'UNCLASSIFIED' ? 'Unclassified' : result.schemaType}
                         </Badge>
+                        {result.mlClassed && (
+                          <Badge
+                            bg={getMlBadgeColor(result.mlResult)}
+                            color={result.mlResult === 'UNCLASSIFIED' ? 'gray.900' : 'white'}
+                            variant="solid"
+                            size="sm"
+                          >
+                            ML
+                          </Badge>
+                        )}
                         <Badge
                           colorPalette={getPatternBadgeColor(getPatternStatus(result.patternPoint))}
                           variant="subtle"
@@ -366,6 +408,17 @@ function getPatternBadgeColor(status: 'yes' | 'no' | 'unclassified'): string {
     case 'unclassified':
     default:
       return 'gray';
+  }
+}
+
+function getMlBadgeColor(result: string | null | undefined): string {
+  switch (result) {
+    case 'TRUE':
+      return 'green.500';
+    case 'FALSE':
+      return 'red.500';
+    default:
+      return 'yellow.400';
   }
 }
 
