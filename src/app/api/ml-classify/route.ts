@@ -18,7 +18,10 @@ export async function POST(_request: NextRequest) {
     const sql = neon(databaseUrl);
 
     const { loadMlModel } = await import('@/lib/ml/modelLoader');
-    const { classifySegment, classifySegmentsBatch } = await loadMlModel() as any;
+    const { classifySegment, classifySegmentsBatch, modelName } = await loadMlModel() as any;
+    
+    // Log pour vérifier que le nom du modèle est bien récupéré
+    console.log(`🤖 Utilisation du modèle: ${modelName}`);
 
     // Récupère les segments à classer par ML
     const rows = await sql`
@@ -74,7 +77,8 @@ export async function POST(_request: NextRequest) {
             ml_result = CASE 
               WHEN ml_result = 'TRUE' OR ml_result = 'FALSE' THEN ml_result
               ELSE 'UNCLASSIFIED'
-            END
+            END,
+            ml_model_name = ${modelName}
           WHERE id = ${row.id} 
             AND schema_type = 'UNCLASSIFIED'
         `;

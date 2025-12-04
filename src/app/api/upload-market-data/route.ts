@@ -84,6 +84,65 @@ function parseMarketDataFile(content: string): { data: Record<string, any>, symb
 }
 
 /**
+ * Valide la continuité temporelle des données intraday
+ * Vérifie que chaque point est exactement 1 minute après le précédent
+ * Autorise les changements de jour (on reprend à partir du nouveau jour)
+ * Rejette les gaps dans la même journée
+ */
+function validateTemporalContinuity(data: Record<string, any>): { valid: boolean; error?: string } {
+  const timestamps = Object.keys(data).sort();
+  
+  if (timestamps.length < 2) {
+    // Pas assez de points pour valider la continuité
+    return { valid: true };
+  }
+
+  for (let i = 1; i < timestamps.length; i++) {
+    const prevTimestamp = new Date(timestamps[i - 1]);
+    const currentTimestamp = new Date(timestamps[i]);
+    
+    // Calculer la différence en millisecondes
+    const diffMs = currentTimestamp.getTime() - prevTimestamp.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+    
+    // Vérifier si le timestamp actuel est avant ou égal au précédent (données dupliquées ou mal ordonnées)
+    if (diffMinutes <= 0) {
+      const prevTimeStr = prevTimestamp.toISOString().replace('T', ' ').substring(0, 19);
+      const currentTimeStr = currentTimestamp.toISOString().replace('T', ' ').substring(0, 19);
+      return {
+        valid: false,
+        error: `Données temporelles invalides : le point à ${currentTimeStr} est antérieur ou égal au point précédent (${prevTimeStr}).\n\nLes données doivent être ordonnées chronologiquement avec un intervalle d'exactement 1 minute entre chaque point.`
+      };
+    }
+    
+    // Vérifier si c'est exactement 1 minute après
+    if (diffMinutes === 1) {
+      // Continuité parfaite, on continue
+      continue;
+    }
+    
+    // Si ce n'est pas 1 minute après, vérifier si c'est le jour suivant
+    const prevDate = prevTimestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentDate = currentTimestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    if (prevDate !== currentDate) {
+      // C'est le jour suivant, c'est OK, on reprend à partir de ce point
+      continue;
+    }
+    
+    // Même jour mais pas 1 minute après → ERREUR
+    const prevTimeStr = prevTimestamp.toISOString().replace('T', ' ').substring(0, 19);
+    const currentTimeStr = currentTimestamp.toISOString().replace('T', ' ').substring(0, 19);
+    return {
+      valid: false,
+      error: `Gap temporel détecté dans les données intraday.\n\nLe point à ${currentTimeStr} n'est pas exactement 1 minute après le point précédent (${prevTimeStr}).\n\nLes données intraday doivent être continues avec un intervalle d'exactement 1 minute entre chaque point. Les changements de jour sont autorisés, mais les gaps dans la même journée ne sont pas acceptés.`
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Extraire le symbole et la date du nom de fichier
  * Format: NOMACTIF_YYYY-MM-DD.txt
  */
@@ -141,6 +200,18 @@ export async function POST(request: NextRequest) {
     
     // Parser les données du fichier
     const { data } = parseMarketDataFile(content);
+    
+    // VALIDATION : Vérifier la continuité temporelle AVANT toute sauvegarde
+    const validation = validateTemporalContinuity(data);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { 
+          error: 'Erreur de validation des données',
+          message: validation.error || 'Les données ne respectent pas la continuité temporelle requise'
+        },
+        { status: 400 }
+      );
+    }
     
     const totalPoints = Object.keys(data).length;
     const id = `${symbol}_${date}`;

@@ -39,25 +39,65 @@ async function ensureBackend() {
   return backendReadyPromise;
 }
 
+/**
+ * Trouve le premier fichier JSON dans le dossier data/
+ * Retourne le chemin complet et le nom du fichier
+ */
+async function findFirstJsonModelFile(dataDir: string): Promise<{ fullPath: string; fileName: string }> {
+  const files = await fs.readdir(dataDir);
+  const jsonFiles = files
+    .filter(file => file.endsWith('.json'))
+    .sort(); // Trier pour avoir un ordre déterministe
+  
+  if (jsonFiles.length === 0) {
+    throw new Error('Aucun fichier JSON de modèle trouvé dans le dossier data/');
+  }
+  
+  const fileName = jsonFiles[0];
+  return {
+    fullPath: path.join(dataDir, fileName),
+    fileName
+  };
+}
+
+/**
+ * Retourne le nom du premier fichier JSON trouvé dans data/
+ * Cette fonction peut être appelée sans charger le modèle
+ */
+export async function getModelFileName(): Promise<string | null> {
+  try {
+    const dataDir = path.join(process.cwd(), 'data');
+    const { fileName } = await findFirstJsonModelFile(dataDir);
+    return fileName;
+  } catch {
+    return null;
+  }
+}
+
+let currentModelFileName: string | null = null;
+
 async function loadModel() {
   if (!modelPromise) {
     modelPromise = (async () => {
       await ensureBackend();
-      // Lecture de data/model.json + poids via un IOHandler custom
+      // Trouver le premier fichier JSON dans data/ au lieu de model.json directement
       const dataDir = path.join(process.cwd(), 'data');
-      const modelJsonPath = path.join(dataDir, 'model.json');
+      const { fullPath: modelJsonPath, fileName } = await findFirstJsonModelFile(dataDir);
+      currentModelFileName = fileName;
       const raw = await fs.readFile(modelJsonPath, 'utf-8');
       const parsed = JSON.parse(raw) as {
         modelTopology: unknown;
-        weightsManifest: Array<{ paths: string[]; weights: tf.io.WeightsManifestEntry['weights'] }>;
+        weightsManifest: Array<{ 
+          paths: string[]; 
+          weights?: Array<{ name: string; shape: number[]; dtype: string }> 
+        }>;
       };
 
       // Agréger toutes les entrées de manifeste (supporte plusieurs blocs)
-      const weightSpecs: tf.io.WeightsManifestEntry['weights'] = [];
+      const weightSpecs: Array<{ name: string; shape: number[]; dtype: string }> = [];
       const weightBuffers: Buffer[] = [];
       for (const entry of parsed.weightsManifest) {
         if (entry.weights) {
-          // @ts-expect-error types internes TFJS
           weightSpecs.push(...entry.weights);
         }
         for (const rel of entry.paths) {
@@ -70,8 +110,8 @@ async function loadModel() {
 
       const ioHandler: tf.io.IOHandler = {
         load: async () => ({
-          modelTopology: parsed.modelTopology,
-          weightSpecs: weightSpecs as unknown as tf.io.WeightsManifestEntry['weights'],
+          modelTopology: parsed.modelTopology as any,
+          weightSpecs: weightSpecs as any,
           weightData,
         }),
       };
@@ -80,6 +120,13 @@ async function loadModel() {
     })();
   }
   return modelPromise;
+}
+
+/**
+ * Retourne le nom du fichier JSON du modèle actuellement chargé
+ */
+export function getCurrentModelFileName(): string | null {
+  return currentModelFileName;
 }
 
 function padOrTruncateSequence<T>(arr: T[], targetLen: number, padValue: T): T[] {

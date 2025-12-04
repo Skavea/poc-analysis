@@ -44,6 +44,7 @@ export const analysisResults = pgTable('analysis_results', {
   // ML classification fields
   mlClassed: boolean('ml_classed').default(false).notNull(),
   mlResult: varchar('ml_result', { length: 20 }).default('UNCLASSIFIED').notNull(),
+  mlModelName: varchar('ml_model_name', { length: 255 }), // Nom du fichier du modèle utilisé (ex: "model.json", "defaultModel.ts")
   patternPoint: varchar('pattern_point', { length: 255 }), // Timestamp du point sélectionné ou null
   pointsData: jsonb('points_data'),
   originalPointCount: integer('original_point_count'),
