@@ -503,6 +503,36 @@ export class DatabaseService {
    * - patternPoint est NULL OU (patternPoint != 'UNDEFINED' ET patternPoint != 'undefined')
    * - invalid = false (exclut les segments invalides)
    */
+  /**
+   * Récupère la liste des noms de modèles ML uniques (sans doublons)
+   */
+  static async getUniqueMlModelNames(): Promise<string[]> {
+    try {
+      const results = await this.db
+        .select({ mlModelName: schema.analysisResults.mlModelName })
+        .from(schema.analysisResults)
+        .where(
+          and(
+            isNotNull(schema.analysisResults.mlModelName),
+            ne(schema.analysisResults.mlModelName, '')
+          )
+        );
+      
+      // Utiliser un Set pour éliminer les doublons
+      const uniqueNames = new Set<string>();
+      for (const result of results) {
+        if (result.mlModelName) {
+          uniqueNames.add(result.mlModelName);
+        }
+      }
+      
+      return Array.from(uniqueNames).sort();
+    } catch (error) {
+      console.error('Error fetching unique ML model names:', error);
+      throw new Error('Failed to fetch unique ML model names');
+    }
+  }
+
   static async getClassifiedAnalysisResults(): Promise<AnalysisResult[]> {
     try {
       return await this.db

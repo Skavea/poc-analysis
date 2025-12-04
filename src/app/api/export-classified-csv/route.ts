@@ -165,12 +165,40 @@ function generateCSVContent(
 
 export async function GET(request: NextRequest) {
   try {
+    // Récupérer les paramètres depuis l'URL
+    const { searchParams } = new URL(request.url);
+    const mlModelName = searchParams.get('ml_model_name');
+    const modelType = searchParams.get('model_type'); // "simple" ou "directe"
+
     // Récupérer tous les résultats classés
-    const classifiedResults = await DatabaseService.getClassifiedAnalysisResults();
+    let classifiedResults = await DatabaseService.getClassifiedAnalysisResults();
+
+    // Filtrer par ml_model_name si fourni
+    if (mlModelName) {
+      classifiedResults = classifiedResults.filter(
+        result => result.mlModelName === mlModelName
+      );
+    }
+    
+    // Filtrer par model_type si fourni (les modèles doivent contenir le type dans leur nom)
+    if (modelType) {
+      classifiedResults = classifiedResults.filter(
+        result => {
+          if (!result.mlModelName) return false;
+          const modelName = result.mlModelName.toLowerCase();
+          return modelName.includes(modelType.toLowerCase()) || 
+                 modelName.includes(`/${modelType}/`) ||
+                 modelName.startsWith(`${modelType}_`);
+        }
+      );
+    }
 
     if (classifiedResults.length === 0) {
+      const message = mlModelName 
+        ? `Aucune donnée classée trouvée pour le modèle "${mlModelName}"`
+        : 'Aucune donnée classée trouvée';
       return NextResponse.json(
-        { error: 'Aucune donnée classée trouvée' },
+        { error: message },
         { status: 404 }
       );
     }
@@ -198,11 +226,17 @@ export async function GET(request: NextRequest) {
     // Générer le contenu CSV avec les 30 prochains points
     const csvContent = generateCSVContent(classifiedResults, next30PointsMap);
 
+    // Générer le nom de fichier avec le modèle si spécifié
+    const modelSuffix = mlModelName 
+      ? `-${mlModelName.replace(/\.json$/, '').replace(/[^a-zA-Z0-9-_]/g, '_')}`
+      : '';
+    const filename = `classified-data${modelSuffix}-${new Date().toISOString().split('T')[0]}.csv`;
+
     // Créer la réponse avec le contenu CSV
     const response = new NextResponse(csvContent, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="classified-data-${new Date().toISOString().split('T')[0]}.csv"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
 

@@ -11,17 +11,43 @@ import { NextRequest, NextResponse } from 'next/server';
 // Forcer le runtime Node.js pour pouvoir charger tfjs-node (native bindings)
 export const runtime = 'nodejs';
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
+    // Récupérer les paramètres depuis le body si présent
+    let simpleModelPath: string | undefined = undefined;
+    let directeModelPath: string | undefined = undefined;
+    try {
+      const body = await request.json().catch(() => ({}));
+      simpleModelPath = body.simpleModelPath || undefined;
+      directeModelPath = body.directeModelPath || undefined;
+      // Support de l'ancien format pour compatibilité
+      if (!simpleModelPath && !directeModelPath && body.modelPath) {
+        simpleModelPath = body.modelPath;
+      }
+    } catch {
+      // Pas de body ou body invalide, utiliser le comportement par défaut
+    }
+
     const { neon } = await import('@neondatabase/serverless');
     const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_yEFj57ApYTDl@ep-green-base-agls4wca-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
     const sql = neon(databaseUrl);
 
+    // Si mode mixte (les deux modèles sont fournis)
+    if (simpleModelPath && directeModelPath) {
+      // TODO: Implémenter la classification mixte
+      // Pour l'instant, on utilise seulement le modèle simple
+      console.log(`🤖 Mode mixte: Simple=${simpleModelPath}, Directe=${directeModelPath}`);
+      // Utiliser le modèle simple pour l'instant
+      simpleModelPath = simpleModelPath;
+      directeModelPath = undefined;
+    }
+
     const { loadMlModel } = await import('@/lib/ml/modelLoader');
-    const { classifySegment, classifySegmentsBatch, modelName } = await loadMlModel() as any;
+    // Passer le simpleModelPath si spécifié (null pour dernier modèle, string pour modèle archivé)
+    const { classifySegment, classifySegmentsBatch, modelName } = await loadMlModel(simpleModelPath) as any;
     
     // Log pour vérifier que le nom du modèle est bien récupéré
-    console.log(`🤖 Utilisation du modèle: ${modelName}`);
+    console.log(`🤖 Utilisation du modèle: ${modelName}${simpleModelPath ? ` (depuis ${simpleModelPath})` : ' (dernier modèle simple)'}`);
 
     // Récupère les segments à classer par ML
     const rows = await sql`

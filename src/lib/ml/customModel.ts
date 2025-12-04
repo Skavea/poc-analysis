@@ -40,34 +40,43 @@ async function ensureBackend() {
 }
 
 /**
- * Trouve le premier fichier JSON dans le dossier data/
+ * Trouve le premier fichier JSON dans un dossier spécifique (simple/ ou directe/)
  * Retourne le chemin complet et le nom du fichier
  */
-async function findFirstJsonModelFile(dataDir: string): Promise<{ fullPath: string; fileName: string }> {
-  const files = await fs.readdir(dataDir);
+async function findFirstJsonModelFile(dataDir: string, subDir?: 'simple' | 'directe'): Promise<{ fullPath: string; fileName: string }> {
+  const targetDir = subDir ? path.join(dataDir, subDir) : dataDir;
+  const files = await fs.readdir(targetDir);
   const jsonFiles = files
     .filter(file => file.endsWith('.json'))
     .sort(); // Trier pour avoir un ordre déterministe
   
   if (jsonFiles.length === 0) {
-    throw new Error('Aucun fichier JSON de modèle trouvé dans le dossier data/');
+    const dirName = subDir ? `${dataDir}/${subDir}` : dataDir;
+    throw new Error(`Aucun fichier JSON de modèle trouvé dans le dossier ${dirName}`);
   }
   
   const fileName = jsonFiles[0];
   return {
-    fullPath: path.join(dataDir, fileName),
+    fullPath: path.join(targetDir, fileName),
     fileName
   };
 }
 
 /**
- * Retourne le nom du premier fichier JSON trouvé dans data/
+ * Retourne le nom du premier fichier JSON trouvé dans data/simple/ ou data/directe/
  * Cette fonction peut être appelée sans charger le modèle
+ * @param type Type de modèle à chercher ('simple' ou 'directe')
  */
-export async function getModelFileName(): Promise<string | null> {
+export async function getModelFileName(type?: 'simple' | 'directe'): Promise<string | null> {
+  // Si un modèle spécifique est déjà chargé, retourner son nom
+  if (currentModelFileName) {
+    return currentModelFileName;
+  }
+  
   try {
     const dataDir = path.join(process.cwd(), 'data');
-    const { fileName } = await findFirstJsonModelFile(dataDir);
+    // Par défaut, chercher dans simple/ si aucun type n'est spécifié
+    const { fileName } = await findFirstJsonModelFile(dataDir, type || 'simple');
     return fileName;
   } catch {
     return null;
@@ -75,14 +84,54 @@ export async function getModelFileName(): Promise<string | null> {
 }
 
 let currentModelFileName: string | null = null;
+let currentModelPath: string | null = null;
+
+/**
+ * Charge un modèle depuis un chemin spécifique
+ * @param modelPath Chemin relatif au dossier data/ (ex: "model.json" ou "archives/first_model_1.json")
+ */
+export async function loadModelFromPath(modelPath?: string): Promise<void> {
+  // Réinitialiser le cache pour forcer le rechargement
+  modelPromise = null;
+  currentModelFileName = null;
+  currentModelPath = modelPath || null;
+}
 
 async function loadModel() {
   if (!modelPromise) {
     modelPromise = (async () => {
       await ensureBackend();
-      // Trouver le premier fichier JSON dans data/ au lieu de model.json directement
-      const dataDir = path.join(process.cwd(), 'data');
-      const { fullPath: modelJsonPath, fileName } = await findFirstJsonModelFile(dataDir);
+      
+      let modelJsonPath: string;
+      let fileName: string;
+      
+      if (currentModelPath) {
+        const dataDir = path.join(process.cwd(), 'data');
+        
+        // Si le chemin est juste "simple" ou "directe", chercher le dernier modèle dans ce dossier
+        if (currentModelPath === 'simple' || currentModelPath === 'directe') {
+          const result = await findFirstJsonModelFile(dataDir, currentModelPath as 'simple' | 'directe');
+          modelJsonPath = result.fullPath;
+          fileName = result.fileName;
+        } else {
+          // Charger depuis un chemin spécifique (data/archives/simple/... ou data/archives/directe/...)
+          modelJsonPath = path.join(dataDir, currentModelPath);
+          fileName = path.basename(currentModelPath);
+          // Vérifier que le fichier existe
+          try {
+            await fs.access(modelJsonPath);
+          } catch {
+            throw new Error(`Modèle non trouvé: ${currentModelPath}`);
+          }
+        }
+      } else {
+        // Trouver le premier fichier JSON dans data/simple/ (comportement par défaut)
+        const dataDir = path.join(process.cwd(), 'data');
+        const result = await findFirstJsonModelFile(dataDir, 'simple');
+        modelJsonPath = result.fullPath;
+        fileName = result.fileName;
+      }
+      
       currentModelFileName = fileName;
       const raw = await fs.readFile(modelJsonPath, 'utf-8');
       const parsed = JSON.parse(raw) as {
@@ -93,6 +142,9 @@ async function loadModel() {
         }>;
       };
 
+      // Déterminer le dossier de base pour les poids (même dossier que le model.json)
+      const modelDir = path.dirname(modelJsonPath);
+
       // Agréger toutes les entrées de manifeste (supporte plusieurs blocs)
       const weightSpecs: Array<{ name: string; shape: number[]; dtype: string }> = [];
       const weightBuffers: Buffer[] = [];
@@ -101,7 +153,8 @@ async function loadModel() {
           weightSpecs.push(...entry.weights);
         }
         for (const rel of entry.paths) {
-          const binPath = path.join(dataDir, rel);
+          // Les chemins dans weightsManifest sont relatifs au dossier du model.json
+          const binPath = path.join(modelDir, rel);
           const buf = await fs.readFile(binPath);
           weightBuffers.push(buf);
         }
