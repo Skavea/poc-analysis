@@ -87,14 +87,28 @@ export default function ManualSegmentForm({
     });
   }, [data]);
 
+  // Trouver le segment le plus récemment créé (basé sur createdAt)
+  const getLastSegmentByCreatedAt = useCallback(() => {
+    if (existingSegments.length === 0) return null;
+    
+    // Trouver le segment avec le createdAt le plus récent (timestamp le plus grand)
+    return existingSegments.reduce((latest, current) => {
+      const currentCreatedAt = new Date(current.createdAt).getTime();
+      const latestCreatedAt = new Date(latest.createdAt).getTime();
+      return currentCreatedAt > latestCreatedAt ? current : latest;
+    });
+  }, [existingSegments]);
+
   // Déterminer le point de départ pour l'affichage
   const getStartIndex = useCallback(() => {
     if (existingSegments.length === 0) {
       return 0; // Commencer au début
     }
     
-    // Trouver le dernier segment et commencer au premier point du segment (le plus ancien chronologiquement)
-    const lastSegment = existingSegments[existingSegments.length - 1];
+    // Trouver le segment le plus récemment créé et commencer au premier point du segment
+    const lastSegment = getLastSegmentByCreatedAt();
+    if (!lastSegment) return 0;
+    
     const lastSegmentStart = new Date(lastSegment.segmentStart);
     
     // Trouver l'index du premier point du dernier segment
@@ -113,7 +127,7 @@ export default function ManualSegmentForm({
     
     // Si on arrive ici, on est à la fin
     return Math.max(0, allPoints.length - 60);
-  }, [existingSegments, allPoints]);
+  }, [existingSegments, allPoints, getLastSegmentByCreatedAt]);
 
   const [startIndex, setStartIndex] = useState(getStartIndex);
   const [selectedPoints, setSelectedPoints] = useState<string[]>([]);
@@ -154,7 +168,9 @@ export default function ManualSegmentForm({
   const lastSegmentPoints = useMemo(() => {
     if (existingSegments.length === 0) return [];
     
-    const lastSegment = existingSegments[existingSegments.length - 1];
+    const lastSegment = getLastSegmentByCreatedAt();
+    if (!lastSegment) return [];
+    
     const startTime = new Date(lastSegment.segmentStart).getTime();
     const endTime = new Date(lastSegment.segmentEnd).getTime();
     
@@ -162,7 +178,7 @@ export default function ManualSegmentForm({
       const pointTime = new Date(p.timestamp).getTime();
       return pointTime === startTime || pointTime === endTime;
     });
-  }, [existingSegments, allPoints]);
+  }, [existingSegments, allPoints, getLastSegmentByCreatedAt]);
 
   // Trouver l'index du point le plus proche d'une position X
   const findNearestPointIndex = useCallback((mouseX: number, chartWidth: number): number | null => {
@@ -300,11 +316,12 @@ export default function ManualSegmentForm({
       : [0, 0];
     
     // Calculer les timestamps du dernier segment pour l'affichage
-    const lastSegmentStartTime = existingSegments.length > 0 
-      ? new Date(existingSegments[existingSegments.length - 1].segmentStart).getTime()
+    const lastSegment = getLastSegmentByCreatedAt();
+    const lastSegmentStartTime = lastSegment 
+      ? new Date(lastSegment.segmentStart).getTime()
       : 0;
-    const lastSegmentEndTime = existingSegments.length > 0
-      ? new Date(existingSegments[existingSegments.length - 1].segmentEnd).getTime()
+    const lastSegmentEndTime = lastSegment
+      ? new Date(lastSegment.segmentEnd).getTime()
       : 0;
     
     return displayPoints.map(point => {
@@ -368,8 +385,8 @@ export default function ManualSegmentForm({
   // Récupérer le segment précédent pour le feedback
   const previousSegment = useMemo(() => {
     if (existingSegments.length === 0) return null;
-    return existingSegments[existingSegments.length - 1];
-  }, [existingSegments]);
+    return getLastSegmentByCreatedAt();
+  }, [existingSegments, getLastSegmentByCreatedAt]);
 
   // Sauvegarder le segment
   const handleSaveSegment = async () => {
@@ -638,7 +655,8 @@ export default function ManualSegmentForm({
           <Box ref={chartContainerRef} height="400px" position="relative">
             {/* SVG overlay pour l'aire sous la courbe du dernier segment (rouge) */}
             {existingSegments.length > 0 && lastSegmentCoordinates.current.start && lastSegmentCoordinates.current.end && (() => {
-              const lastSegment = existingSegments[existingSegments.length - 1];
+              const lastSegment = getLastSegmentByCreatedAt();
+              if (!lastSegment) return null;
               const lastSegmentStartTime = new Date(lastSegment.segmentStart).getTime();
               const lastSegmentEndTime = new Date(lastSegment.segmentEnd).getTime();
               
@@ -913,7 +931,8 @@ export default function ManualSegmentForm({
                     
                     // Capturer les coordonnées des points du dernier segment
                     if (isLastSegmentPoint && existingSegments.length > 0) {
-                      const lastSegment = existingSegments[existingSegments.length - 1];
+                      const lastSegment = getLastSegmentByCreatedAt();
+                      if (!lastSegment) return <g />;
                       const startTime = new Date(lastSegment.segmentStart).getTime();
                       const endTime = new Date(lastSegment.segmentEnd).getTime();
                       const pointTime = new Date(timestamp).getTime();
