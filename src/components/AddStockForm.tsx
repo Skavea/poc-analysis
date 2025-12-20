@@ -19,12 +19,15 @@ import {
   Field,
   Spinner,
 } from "@chakra-ui/react";
-import { Upload } from 'lucide-react';
+import { Upload, Settings } from 'lucide-react';
+
+type GenerationMode = 'auto' | 'manual';
 
 export default function AddStockForm() {
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('auto');
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +42,7 @@ export default function AddStockForm() {
       
       const formData = new FormData();
       formData.append('file', selectedFile);
+      formData.append('mode', generationMode);
       
       const response = await fetch('/api/upload-market-data', {
         method: 'POST',
@@ -49,8 +53,14 @@ export default function AddStockForm() {
 
       if (response.ok && data.success) {
         setSelectedFile(null);
-        alert(data.message || 'Fichier traité avec succès !');
-        window.location.reload();
+        
+        // Si mode manuel, rediriger vers la page de création manuelle
+        if (generationMode === 'manual' && data.data?.id) {
+          window.location.href = `/manual-segment/${data.data.id}`;
+        } else {
+          alert(data.message || 'Fichier traité avec succès !');
+          window.location.reload();
+        }
       } else {
         const errorMessage = data.message || data.error || 'Erreur lors du traitement du fichier';
         setError(errorMessage);
@@ -129,7 +139,44 @@ export default function AddStockForm() {
                       </>
                     )}
                   </Button>
+                  <Box minW="180px" position="relative">
+                    <select
+                      value={generationMode}
+                      onChange={(e) => setGenerationMode(e.target.value as GenerationMode)}
+                      disabled={isAdding}
+                      style={{
+                        padding: '8px 12px 8px 40px',
+                        fontSize: '14px',
+                        border: '1px solid var(--chakra-colors-border-default)',
+                        borderRadius: 'var(--chakra-radii-md)',
+                        background: 'var(--chakra-colors-bg-default)',
+                        color: 'var(--chakra-colors-fg-default)',
+                        width: '100%',
+                        cursor: isAdding ? 'not-allowed' : 'pointer',
+                        appearance: 'none',
+                        backgroundImage: 'none',
+                      }}
+                    >
+                      <option value="auto">Mode Auto</option>
+                      <option value="manual">Mode Manuel</option>
+                    </select>
+                    <Box
+                      position="absolute"
+                      left="12px"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      pointerEvents="none"
+                      color="brand.600"
+                    >
+                      <Settings size={16} />
+                    </Box>
+                  </Box>
                 </HStack>
+                <Field.HelperText fontSize="xs" color="fg.muted" mt={1}>
+                  {generationMode === 'auto' 
+                    ? 'Les segments seront générés automatiquement' 
+                    : 'Vous définirez les segments manuellement via un formulaire'}
+                </Field.HelperText>
                 {selectedFile && (
                   <Text fontSize="xs" color="fg.muted" mt={1}>
                     📁 Fichier sélectionné: {selectedFile.name}

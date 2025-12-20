@@ -430,6 +430,53 @@ export class StockAnalysisService {
    * 3. Validate segment meets requirements (6-50 filtered points, 4+ peak points, 6+ in region)
    * 4. Adjust segment size if validation fails
    */
+  /**
+   * Crée un segment manuel à partir de deux timestamps
+   * Méthode publique pour la création manuelle de segments
+   */
+  public createManualSegment(
+    symbol: string,
+    date: string,
+    startTimestamp: string,
+    endTimestamp: string,
+    data: Record<string, unknown>,
+    schemaType?: 'R' | 'V' | null,
+    patternPoint?: string | null
+  ): AnalyzedSegment | null {
+    const allTimestamps = Object.keys(data).sort();
+    
+    // Trouver tous les timestamps entre startTimestamp et endTimestamp (inclus)
+    const startTime = new Date(startTimestamp).getTime();
+    const endTime = new Date(endTimestamp).getTime();
+
+    const segmentTimestamps = allTimestamps.filter(ts => {
+      const tsTime = new Date(ts).getTime();
+      return tsTime >= startTime && tsTime <= endTime;
+    });
+
+    if (segmentTimestamps.length < this.MIN_RED_POINTS) {
+      return null;
+    }
+
+    // Utiliser processSegment pour calculer toutes les métrics
+    const segment = this.processSegment(
+      symbol,
+      date,
+      segmentTimestamps,
+      data,
+      allTimestamps
+    );
+
+    if (!segment) {
+      return null;
+    }
+
+    // Appliquer le schemaType et patternPoint si fournis
+    // Note: schemaType et patternPoint ne sont pas dans le type AnalyzedSegment
+    // mais seront appliqués lors de la sauvegarde
+    return segment;
+  }
+
   protected processSegment(
     symbol: string, 
     date: string, 
@@ -1392,6 +1439,96 @@ export class StockAnalysisService {
     }
     
     return savedCount;
+  }
+
+  /**
+   * Sauvegarde un segment manuel avec schemaType et patternPoint
+   */
+  async saveManualSegment(
+    segment: AnalyzedSegment,
+    stockDataId: string,
+    schemaType: 'R' | 'V' | null,
+    patternPoint: string | null
+  ): Promise<void> {
+    const { createAnalysisResultImage } = await import('./chartImageGenerator');
+    
+    // Vérifier si le segment est valide (a une séquence continue d'une minute)
+    const isValid = this.isValidSegment(segment.pointsData);
+    const isInvalid = !isValid;
+
+    // Déterminer le schema_type à utiliser
+    const finalSchemaType = schemaType && (schemaType === 'R' || schemaType === 'V') ? schemaType : 'UNCLASSIFIED';
+
+    // Sauvegarder le segment
+    await sql`
+      INSERT INTO analysis_results (
+        id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
+        x0, min_price, max_price, average_price, trend_direction, 
+        points_data, original_point_count, points_in_region, schema_type,
+        red_points_data, green_points_data, red_point_count, green_point_count, black_points_count, u,
+        red_points_formatted, green_points_formatted, invalid, pattern_point
+      ) VALUES (
+        ${segment.id},
+        ${stockDataId},
+        ${segment.symbol},
+        ${segment.date},
+        ${segment.segmentStart},
+        ${segment.segmentEnd},
+        ${segment.pointCount},
+        ${segment.x0},
+        ${segment.minPrice},
+        ${segment.maxPrice},
+        ${segment.averagePrice},
+        ${segment.trendDirection},
+        ${JSON.stringify(segment.pointsData)},
+        ${segment.originalPointCount},
+        ${segment.pointsInRegion},
+        ${finalSchemaType},
+        ${JSON.stringify(segment.redPointsData)},
+        ${JSON.stringify(segment.greenPointsData)},
+        ${segment.redPointCount},
+        ${segment.greenPointCount},
+        ${segment.blackPointsCount},
+        ${segment.u},
+        ${segment.redPointsFormatted},
+        ${segment.greenPointsFormatted},
+        ${isInvalid},
+        ${patternPoint}
+      )
+      ON CONFLICT (id) DO NOTHING
+    `;
+    
+    // Générer et sauvegarder l'image du graphique
+    try {
+      const imageData = createAnalysisResultImage(
+        segment.id,
+        {
+          id: segment.id,
+          pointsData: segment.pointsData,
+          minPrice: segment.minPrice,
+          maxPrice: segment.maxPrice,
+          averagePrice: segment.averagePrice,
+          x0: segment.x0,
+          patternPoint: patternPoint || null
+        },
+        800,
+        400
+      );
+      
+      await sql`
+        INSERT INTO analysis_results_images (
+          id, analysis_result_id, img_data
+        ) VALUES (
+          ${imageData.id},
+          ${imageData.analysisResultId},
+          ${imageData.imgData}
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+    } catch (imageError) {
+      console.error(`Error generating image for segment ${segment.id}:`, imageError);
+      // On continue même si l'image n'a pas pu être générée
+    }
   }
 
 }

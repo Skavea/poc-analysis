@@ -176,6 +176,7 @@ export async function POST(request: NextRequest) {
     // Récupérer le fichier depuis FormData
     const formData = await request.formData();
     const file = formData.get('file') as File;
+    const mode = (formData.get('mode') as string) || 'auto';
 
     if (!file) {
       return NextResponse.json(
@@ -230,14 +231,20 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Données sauvegardées pour ${symbol} - ${date}`);
 
+    let segmentsCreated = 0;
+    let analysisMessage = '';
+
+    // Si mode manuel, ne pas créer les segments maintenant
+    if (mode === 'manual') {
+      analysisMessage = 'Mode manuel activé. Vous pourrez définir les segments via le formulaire.';
+      console.log(`📝 Mode manuel: les segments seront créés manuellement`);
+    } else {
+      // Mode auto : créer les segments automatiquement
     // Vérifier si une analyse existe déjà pour ce symbole
     const existingAnalysis = await sql`
       SELECT COUNT(*) as count FROM analysis_results 
       WHERE symbol = ${symbol}
     `;
-
-    let segmentsCreated = 0;
-    let analysisMessage = '';
 
     if (existingAnalysis[0].count > 0) {
       analysisMessage = `Analyse déjà existante pour ${symbol} (${existingAnalysis[0].count} segments).`;
@@ -261,6 +268,7 @@ export async function POST(request: NextRequest) {
       } catch (analysisError) {
         console.error('Erreur lors de l\'analyse:', analysisError);
         analysisMessage = 'Erreur lors de l\'analyse des segments.';
+        }
       }
     }
 

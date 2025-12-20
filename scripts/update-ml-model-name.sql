@@ -13,3 +13,4 @@ WHERE ml_classed = TRUE
 -- SELECT COUNT(*) as updated_count FROM analysis_results WHERE ml_model_name = 'first_model_1';
 
 
+

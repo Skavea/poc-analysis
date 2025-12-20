@@ -7,7 +7,7 @@
 
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { eq, and, or, desc, sql, gte, lte, inArray, ne, isNotNull, isNull } from 'drizzle-orm';
+import { eq, and, or, desc, asc, sql, gte, lte, inArray, ne, isNotNull, isNull } from 'drizzle-orm';
 import * as schema from './schema';
 import { 
   StockData, 
@@ -132,6 +132,21 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching stock data:', error);
       throw new Error('Failed to fetch stock data');
+    }
+  }
+
+  static async getStockDataById(id: string): Promise<StockData | null> {
+    try {
+      const [result] = await this.db
+        .select()
+        .from(schema.stockData)
+        .where(eq(schema.stockData.id, id))
+        .limit(1);
+      
+      return result || null;
+    } catch (error) {
+      console.error('Error fetching stock data by ID:', error);
+      throw new Error('Failed to fetch stock data by ID');
     }
   }
 
@@ -481,6 +496,19 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching analysis results by stream ID:', error);
       throw new Error('Failed to fetch analysis results by stream ID');
+    }
+  }
+
+  static async getAnalysisResultsByStockDataId(stockDataId: string): Promise<AnalysisResult[]> {
+    try {
+      return await this.db
+        .select()
+        .from(schema.analysisResults)
+        .where(eq(schema.analysisResults.stockDataId, stockDataId))
+        .orderBy(asc(schema.analysisResults.segmentStart));
+    } catch (error) {
+      console.error('Error fetching analysis results by stock data ID:', error);
+      throw new Error('Failed to fetch analysis results by stock data ID');
     }
   }
 

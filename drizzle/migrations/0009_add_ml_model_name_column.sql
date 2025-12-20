@@ -7,3 +7,4 @@ ALTER TABLE analysis_results
 ADD COLUMN IF NOT EXISTS ml_model_name VARCHAR(255);
 
 
+
