@@ -31,6 +31,7 @@ export default async function ManualSegmentPage({ params }: PageProps) {
   }
 
   // Récupérer les segments existants pour ce stock_data
+  // Retourne un tableau vide en cas d'erreur de connexion pour permettre l'affichage de la page
   const existingSegments = await DatabaseService.getAnalysisResultsByStockDataId(stockDataId);
   
   // Calculer les statistiques

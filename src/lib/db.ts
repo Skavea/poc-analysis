@@ -499,17 +499,42 @@ export class DatabaseService {
     }
   }
 
-  static async getAnalysisResultsByStockDataId(stockDataId: string): Promise<AnalysisResult[]> {
-    try {
-      return await this.db
-        .select()
-        .from(schema.analysisResults)
-        .where(eq(schema.analysisResults.stockDataId, stockDataId))
-        .orderBy(asc(schema.analysisResults.segmentStart));
-    } catch (error) {
-      console.error('Error fetching analysis results by stock data ID:', error);
-      throw new Error('Failed to fetch analysis results by stock data ID');
+  static async getAnalysisResultsByStockDataId(stockDataId: string, retries = 3): Promise<AnalysisResult[]> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        return await this.db
+          .select()
+          .from(schema.analysisResults)
+          .where(eq(schema.analysisResults.stockDataId, stockDataId))
+          .orderBy(asc(schema.analysisResults.segmentStart));
+      } catch (error: any) {
+        const isTimeout = error?.code === 'ETIMEDOUT' || 
+                         error?.cause?.code === 'ETIMEDOUT' ||
+                         error?.message?.includes('fetch failed') ||
+                         error?.message?.includes('timeout');
+        
+        if (isTimeout && attempt < retries) {
+          const delay = attempt * 1000; // Délai progressif : 1s, 2s, 3s
+          console.warn(`⚠️ Timeout lors de la récupération des segments (tentative ${attempt}/${retries}). Nouvelle tentative dans ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // Si c'est une erreur de connexion et qu'on a épuisé les tentatives, retourner un tableau vide
+        // pour permettre à la page de s'afficher quand même
+        if (isTimeout) {
+          console.error(`❌ Échec de connexion à la base de données après ${retries} tentatives. Retour d'un tableau vide.`);
+          return [];
+        }
+        
+        // Pour les autres erreurs, logger et relancer
+        console.error('Error fetching analysis results by stock data ID:', error);
+        throw new Error('Failed to fetch analysis results by stock data ID');
+      }
     }
+    
+    // Ne devrait jamais arriver ici, mais au cas où
+    return [];
   }
 
   static async getAllAnalysisResults(): Promise<AnalysisResult[]> {
