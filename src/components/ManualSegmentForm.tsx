@@ -93,15 +93,14 @@ export default function ManualSegmentForm({
       return 0; // Commencer au début
     }
     
-    // Trouver le dernier segment et commencer après (1 minute après la fin)
+    // Trouver le dernier segment et commencer au premier point du segment (le plus ancien chronologiquement)
     const lastSegment = existingSegments[existingSegments.length - 1];
-    const lastSegmentEnd = new Date(lastSegment.segmentEnd);
-    const nextStartTime = new Date(lastSegmentEnd.getTime() + 60000); // +1 minute
+    const lastSegmentStart = new Date(lastSegment.segmentStart);
     
-    // Trouver l'index du premier point après le dernier segment
+    // Trouver l'index du premier point du dernier segment
     for (let i = 0; i < allPoints.length; i++) {
       const pointTime = new Date(allPoints[i].timestamp);
-      if (pointTime.getTime() >= nextStartTime.getTime()) {
+      if (pointTime.getTime() >= lastSegmentStart.getTime()) {
         // Afficher 60 points à partir de ce point, ou jusqu'à la fin si moins de 60 points
         const remainingPoints = allPoints.length - i;
         if (remainingPoints < 60) {
@@ -126,6 +125,13 @@ export default function ManualSegmentForm({
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const [isHoveringChart, setIsHoveringChart] = useState(false);
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Refs pour stocker les coordonnées réelles des points d'extrémité
+  const selectedPointsCoordinates = useRef<{ start: { x: number; y: number } | null; end: { x: number; y: number } | null }>({ start: null, end: null });
+  const lastSegmentCoordinates = useRef<{ start: { x: number; y: number } | null; end: { x: number; y: number } | null }>({ start: null, end: null });
+  
+  // État pour forcer le re-rendu après capture des coordonnées
+  const [coordinatesReady, setCoordinatesReady] = useState(false);
   
   // États pour le feedback du segment précédent
   const [isResultCorrect, setIsResultCorrect] = useState<boolean | null>(null);
@@ -196,6 +202,9 @@ export default function ManualSegmentForm({
 
   // Fonction utilitaire pour sélectionner/désélectionner un point
   const togglePointSelection = useCallback((timestamp: string) => {
+    // Réinitialiser les coordonnées quand la sélection change
+    selectedPointsCoordinates.current = { start: null, end: null };
+    setCoordinatesReady(false);
     setSelectedPoints(prev => {
       if (prev.includes(timestamp)) {
         // Désélectionner
@@ -290,6 +299,14 @@ export default function ManualSegmentForm({
       ? selectedPoints.map(t => new Date(t).getTime()).sort((a, b) => a - b)
       : [0, 0];
     
+    // Calculer les timestamps du dernier segment pour l'affichage
+    const lastSegmentStartTime = existingSegments.length > 0 
+      ? new Date(existingSegments[existingSegments.length - 1].segmentStart).getTime()
+      : 0;
+    const lastSegmentEndTime = existingSegments.length > 0
+      ? new Date(existingSegments[existingSegments.length - 1].segmentEnd).getTime()
+      : 0;
+    
     return displayPoints.map(point => {
       const isSelected = selectedPoints.includes(point.timestamp);
       const isLastSegmentPoint = lastSegmentPoints.some(
@@ -298,6 +315,7 @@ export default function ManualSegmentForm({
       
       const pointTime = new Date(point.timestamp).getTime();
       const isInSelectedArea = selectedPoints.length === 2 && pointTime >= startTime && pointTime <= endTime;
+      const isInLastSegment = existingSegments.length > 0 && pointTime >= lastSegmentStartTime && pointTime <= lastSegmentEndTime;
       
       return {
         ...point,
@@ -305,11 +323,14 @@ export default function ManualSegmentForm({
         originalTimestamp: point.timestamp, // Garder le timestamp original pour les comparaisons
         isSelected,
         isLastSegmentPoint,
+        isInLastSegment,
         // Valeur pour l'aire sélectionnée (null si en dehors de la sélection)
         selectedAreaClose: isInSelectedArea ? point.close : null,
+        // Valeur pour l'aire du dernier segment (null si en dehors du segment)
+        lastSegmentAreaClose: isInLastSegment ? point.close : null,
       };
     });
-  }, [displayPoints, selectedPoints, lastSegmentPoints]);
+  }, [displayPoints, selectedPoints, lastSegmentPoints, existingSegments]);
 
   // Calculer la zone sélectionnée pour l'aire sous la courbe
   // Créer une série de données avec null pour les points en dehors de la sélection
@@ -496,9 +517,8 @@ export default function ManualSegmentForm({
                 borderColor="border.default"
                 color="fg.default"
               >
-                <Text fontWeight="bold" mb={2}>Données du segment :</Text>
                 <Text>{rvValue} {trendValue} {uValue} {segmentId} {x0DateStr}</Text>
-                <Text mt={2}>{lastCreatedSegment.redPointsFormatted || ''}</Text>
+                <Text>{lastCreatedSegment.redPointsFormatted || ''}</Text>
                 <Text>{lastCreatedSegment.greenPointsFormatted || ''}</Text>
               </Box>
               
@@ -616,45 +636,50 @@ export default function ManualSegmentForm({
         </Card.Header>
         <Card.Body>
           <Box ref={chartContainerRef} height="400px" position="relative">
-            {/* SVG overlay pour l'aire sous la courbe */}
-            {selectedPoints.length === 2 && (() => {
-              const [startTime, endTime] = selectedPoints.map(t => new Date(t).getTime()).sort((a, b) => a - b);
-              const selectedPointsData = chartData.filter(point => {
-                const timestamp = point.originalTimestamp || new Date(point.timestamp).toISOString();
-                const pointTime = new Date(timestamp).getTime();
-                return pointTime >= startTime && pointTime <= endTime && point.selectedAreaClose !== null;
+            {/* SVG overlay pour l'aire sous la courbe du dernier segment (rouge) */}
+            {existingSegments.length > 0 && lastSegmentCoordinates.current.start && lastSegmentCoordinates.current.end && (() => {
+              const lastSegment = existingSegments[existingSegments.length - 1];
+              const lastSegmentStartTime = new Date(lastSegment.segmentStart).getTime();
+              const lastSegmentEndTime = new Date(lastSegment.segmentEnd).getTime();
+              
+              // Filtrer les points du dernier segment dans displayPoints
+              const lastSegmentPointsData = displayPoints.filter(point => {
+                const pointTime = new Date(point.timestamp).getTime();
+                return pointTime >= lastSegmentStartTime && pointTime <= lastSegmentEndTime;
               });
               
-              if (selectedPointsData.length === 0) return null;
+              if (lastSegmentPointsData.length === 0) return null;
               
-              // Calculer les coordonnées SVG en utilisant les mêmes échelles que le graphique
-              const xDomain = [
-                displayPoints.length > 0 ? new Date(displayPoints[0].timestamp).getTime() : 0,
-                displayPoints.length > 0 ? new Date(displayPoints[displayPoints.length - 1].timestamp).getTime() : 0
-              ];
+              // Utiliser les coordonnées réelles des points d'extrémité
+              const startX = lastSegmentCoordinates.current.start.x;
+              const endX = lastSegmentCoordinates.current.end.x;
+              const startY = lastSegmentCoordinates.current.start.y;
+              const endY = lastSegmentCoordinates.current.end.y;
+              
+              // Calculer la largeur réelle basée sur les positions X des extrémités
+              const actualWidth = Math.abs(endX - startX);
+              const minX = Math.min(startX, endX);
+              
+              // Calculer les coordonnées Y pour tous les points du segment
               const yDomain = [priceRange.min, priceRange.max];
-              
-              // Marges du LineChart (doivent correspondre exactement)
-              // Ajuster légèrement pour compenser le décalage
               const marginTop = 5;
-              const marginRight = 45;
-              const marginBottom = 5;
-              const marginLeft = 45;
-              
-              // Ajustements pour corriger le décalage (à ajuster selon les observations)
-              const offsetX = 30; // Ajuster si décalage horizontal
-              const offsetY = 0; // Ajuster si décalage vertical
-              
-              // Dimensions du graphique (400px de hauteur totale)
-              const chartHeight = 340 - marginTop - marginBottom; // 390px
-              const actualChartWidth = chartContainerRef.current?.clientWidth || 800;
-              const plotWidth = actualChartWidth - marginLeft - marginRight;
+              const chartHeight = 340 - marginTop - 5;
               const plotHeight = chartHeight;
               
-              // Créer le path SVG avec ajustements pour corriger le décalage
-              const points = selectedPointsData.map((point) => {
-                const x = marginLeft + offsetX + ((point.timestamp - xDomain[0]) / (xDomain[1] - xDomain[0])) * plotWidth;
-                const y = marginTop + offsetY + plotHeight - ((point.selectedAreaClose! - yDomain[0]) / (yDomain[1] - yDomain[0])) * plotHeight;
+              // Créer le path SVG pour le dernier segment
+              const points = lastSegmentPointsData.map((point, index) => {
+                // Calculer la position X relative dans le segment
+                const pointTime = new Date(point.timestamp).getTime();
+                const segmentStartTime = lastSegmentStartTime;
+                const segmentEndTime = lastSegmentEndTime;
+                const segmentDuration = segmentEndTime - segmentStartTime;
+                const relativePosition = segmentDuration > 0 ? (pointTime - segmentStartTime) / segmentDuration : 0;
+                
+                // Position X basée sur la largeur réelle
+                const x = minX + (relativePosition * actualWidth);
+                
+                // Position Y basée sur le prix
+                const y = marginTop + plotHeight - ((point.close - yDomain[0]) / (yDomain[1] - yDomain[0])) * plotHeight;
                 return { x, y };
               });
               
@@ -664,9 +689,86 @@ export default function ManualSegmentForm({
               for (let i = 1; i < points.length; i++) {
                 path += ` L ${points[i].x},${points[i].y}`;
               }
-              // Fermer le path en allant au bas du graphique (bas de la zone de tracé)
-              const bottomY = marginTop + offsetY + plotHeight;
+              // Fermer le path en allant au bas du graphique
+              const bottomY = marginTop + plotHeight;
               path += ` L ${points[points.length - 1].x},${bottomY} L ${points[0].x},${bottomY} Z`;
+              
+              const actualChartWidth = chartContainerRef.current?.clientWidth || 800;
+              
+              return (
+                <svg
+                  width={actualChartWidth}
+                  height={400}
+                  style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 1 }}
+                >
+                  <defs>
+                    <linearGradient id="lastSegmentGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.1" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={path}
+                    fill="url(#lastSegmentGradient)"
+                    stroke="none"
+                  />
+                </svg>
+              );
+            })()}
+            
+            {/* SVG overlay pour l'aire sous la courbe de la sélection (cyan) */}
+            {selectedPoints.length === 2 && coordinatesReady && selectedPointsCoordinates.current.start && selectedPointsCoordinates.current.end && (() => {
+              const [startTime, endTime] = selectedPoints.map(t => new Date(t).getTime()).sort((a, b) => a - b);
+              const selectedPointsData = chartData.filter(point => {
+                const timestamp = point.originalTimestamp || new Date(point.timestamp).toISOString();
+                const pointTime = new Date(timestamp).getTime();
+                return pointTime >= startTime && pointTime <= endTime && point.selectedAreaClose !== null;
+              });
+              
+              if (selectedPointsData.length === 0) return null;
+              
+              // Utiliser les coordonnées réelles des points d'extrémité
+              const startX = selectedPointsCoordinates.current.start.x;
+              const endX = selectedPointsCoordinates.current.end.x;
+              const startY = selectedPointsCoordinates.current.start.y;
+              const endY = selectedPointsCoordinates.current.end.y;
+              
+              // Calculer la largeur réelle basée sur les positions X des extrémités
+              const actualWidth = Math.abs(endX - startX);
+              const minX = Math.min(startX, endX);
+              
+              // Calculer les coordonnées Y pour tous les points de la sélection
+              const yDomain = [priceRange.min, priceRange.max];
+              const marginTop = 5;
+              const chartHeight = 340 - marginTop - 5;
+              const plotHeight = chartHeight;
+              
+              // Créer le path SVG pour la sélection
+              const points = selectedPointsData.map((point) => {
+                // Calculer la position X relative dans la sélection
+                const pointTime = new Date(point.originalTimestamp || point.timestamp).getTime();
+                const selectionDuration = endTime - startTime;
+                const relativePosition = selectionDuration > 0 ? (pointTime - startTime) / selectionDuration : 0;
+                
+                // Position X basée sur la largeur réelle
+                const x = minX + (relativePosition * actualWidth);
+                
+                // Position Y basée sur le prix
+                const y = marginTop + plotHeight - ((point.selectedAreaClose! - yDomain[0]) / (yDomain[1] - yDomain[0])) * plotHeight;
+                return { x, y };
+              });
+              
+              if (points.length === 0) return null;
+              
+              let path = `M ${points[0].x},${points[0].y}`;
+              for (let i = 1; i < points.length; i++) {
+                path += ` L ${points[i].x},${points[i].y}`;
+              }
+              // Fermer le path en allant au bas du graphique
+              const bottomY = marginTop + plotHeight;
+              path += ` L ${points[points.length - 1].x},${bottomY} L ${points[0].x},${bottomY} Z`;
+              
+              const actualChartWidth = chartContainerRef.current?.clientWidth || 800;
               
               return (
                 <svg
@@ -770,7 +872,7 @@ export default function ManualSegmentForm({
                     dataKey="selectedAreaClose"
                     stroke="none"
                     fill="#06b6d4"
-                    fillOpacity={0.6}
+                    fillOpacity={0.8}
                     data={chartData}
                     isAnimationActive={false}
                     connectNulls={false}
@@ -795,6 +897,34 @@ export default function ManualSegmentForm({
                     const isLastSegmentPoint = lastSegmentPoints.some(
                       p => p.timestamp === timestamp
                     );
+                    
+                    // Capturer les coordonnées des points sélectionnés
+                    if (isSelected && selectedPoints.length === 2) {
+                      const [startTime, endTime] = selectedPoints.map(t => new Date(t).getTime()).sort((a, b) => a - b);
+                      const pointTime = new Date(timestamp).getTime();
+                      if (pointTime === startTime) {
+                        selectedPointsCoordinates.current.start = { x: cx, y: cy };
+                        setCoordinatesReady(true);
+                      } else if (pointTime === endTime) {
+                        selectedPointsCoordinates.current.end = { x: cx, y: cy };
+                        setCoordinatesReady(true);
+                      }
+                    }
+                    
+                    // Capturer les coordonnées des points du dernier segment
+                    if (isLastSegmentPoint && existingSegments.length > 0) {
+                      const lastSegment = existingSegments[existingSegments.length - 1];
+                      const startTime = new Date(lastSegment.segmentStart).getTime();
+                      const endTime = new Date(lastSegment.segmentEnd).getTime();
+                      const pointTime = new Date(timestamp).getTime();
+                      if (pointTime === startTime) {
+                        lastSegmentCoordinates.current.start = { x: cx, y: cy };
+                        setCoordinatesReady(true);
+                      } else if (pointTime === endTime) {
+                        lastSegmentCoordinates.current.end = { x: cx, y: cy };
+                        setCoordinatesReady(true);
+                      }
+                    }
                     
                     // Point sélectionné
                     if (isSelected) {
