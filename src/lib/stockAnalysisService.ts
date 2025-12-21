@@ -1459,44 +1459,71 @@ export class StockAnalysisService {
     // Déterminer le schema_type à utiliser
     const finalSchemaType = schemaType && (schemaType === 'R' || schemaType === 'V') ? schemaType : 'UNCLASSIFIED';
 
-    // Sauvegarder le segment
-    await sql`
-      INSERT INTO analysis_results (
-        id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
-        x0, min_price, max_price, average_price, trend_direction, 
-        points_data, original_point_count, points_in_region, schema_type,
-        red_points_data, green_points_data, red_point_count, green_point_count, black_points_count, u,
-        red_points_formatted, green_points_formatted, invalid, pattern_point
-      ) VALUES (
-        ${segment.id},
-        ${stockDataId},
-        ${segment.symbol},
-        ${segment.date},
-        ${segment.segmentStart},
-        ${segment.segmentEnd},
-        ${segment.pointCount},
-        ${segment.x0},
-        ${segment.minPrice},
-        ${segment.maxPrice},
-        ${segment.averagePrice},
-        ${segment.trendDirection},
-        ${JSON.stringify(segment.pointsData)},
-        ${segment.originalPointCount},
-        ${segment.pointsInRegion},
-        ${finalSchemaType},
-        ${JSON.stringify(segment.redPointsData)},
-        ${JSON.stringify(segment.greenPointsData)},
-        ${segment.redPointCount},
-        ${segment.greenPointCount},
-        ${segment.blackPointsCount},
-        ${segment.u},
-        ${segment.redPointsFormatted},
-        ${segment.greenPointsFormatted},
-        ${isInvalid},
-        ${patternPoint}
-      )
-      ON CONFLICT (id) DO NOTHING
-    `;
+    // Sauvegarder le segment avec retry en cas de timeout
+    const retries = 3;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await sql`
+          INSERT INTO analysis_results (
+            id, stock_data_id, symbol, date, segment_start, segment_end, point_count,
+            x0, min_price, max_price, average_price, trend_direction, 
+            points_data, original_point_count, points_in_region, schema_type,
+            red_points_data, green_points_data, red_point_count, green_point_count, black_points_count, u,
+            red_points_formatted, green_points_formatted, invalid, pattern_point
+          ) VALUES (
+            ${segment.id},
+            ${stockDataId},
+            ${segment.symbol},
+            ${segment.date},
+            ${segment.segmentStart},
+            ${segment.segmentEnd},
+            ${segment.pointCount},
+            ${segment.x0},
+            ${segment.minPrice},
+            ${segment.maxPrice},
+            ${segment.averagePrice},
+            ${segment.trendDirection},
+            ${JSON.stringify(segment.pointsData)},
+            ${segment.originalPointCount},
+            ${segment.pointsInRegion},
+            ${finalSchemaType},
+            ${JSON.stringify(segment.redPointsData)},
+            ${JSON.stringify(segment.greenPointsData)},
+            ${segment.redPointCount},
+            ${segment.greenPointCount},
+            ${segment.blackPointsCount},
+            ${segment.u},
+            ${segment.redPointsFormatted},
+            ${segment.greenPointsFormatted},
+            ${isInvalid},
+            ${patternPoint}
+          )
+          ON CONFLICT (id) DO NOTHING
+        `;
+        break; // Succès, sortir de la boucle
+      } catch (error: any) {
+        const isTimeout = error?.code === 'ETIMEDOUT' || 
+                         error?.cause?.code === 'ETIMEDOUT' ||
+                         error?.message?.includes('fetch failed') ||
+                         error?.message?.includes('timeout');
+        
+        if (isTimeout && attempt < retries) {
+          const delay = attempt * 1000; // Délai progressif : 1s, 2s, 3s
+          console.warn(`⚠️ Timeout lors de la sauvegarde du segment (tentative ${attempt}/${retries}). Nouvelle tentative dans ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // Si c'est une erreur de connexion et qu'on a épuisé les tentatives, relancer l'erreur
+        if (isTimeout) {
+          console.error(`❌ Échec de connexion à la base de données après ${retries} tentatives lors de la sauvegarde du segment.`);
+          throw new Error('Failed to save segment after multiple retry attempts');
+        }
+        
+        // Pour les autres erreurs, relancer immédiatement
+        throw error;
+      }
+    }
     
     // Générer et sauvegarder l'image du graphique
     try {
@@ -1515,16 +1542,45 @@ export class StockAnalysisService {
         400
       );
       
-      await sql`
-        INSERT INTO analysis_results_images (
-          id, analysis_result_id, img_data
-        ) VALUES (
-          ${imageData.id},
-          ${imageData.analysisResultId},
-          ${imageData.imgData}
-        )
-        ON CONFLICT (id) DO NOTHING
-      `;
+      // Sauvegarder l'image avec retry en cas de timeout
+      const imageRetries = 3;
+      for (let attempt = 1; attempt <= imageRetries; attempt++) {
+        try {
+          await sql`
+            INSERT INTO analysis_results_images (
+              id, analysis_result_id, img_data
+            ) VALUES (
+              ${imageData.id},
+              ${imageData.analysisResultId},
+              ${imageData.imgData}
+            )
+            ON CONFLICT (id) DO NOTHING
+          `;
+          break; // Succès, sortir de la boucle
+        } catch (imageError: any) {
+          const isTimeout = imageError?.code === 'ETIMEDOUT' || 
+                           imageError?.cause?.code === 'ETIMEDOUT' ||
+                           imageError?.message?.includes('fetch failed') ||
+                           imageError?.message?.includes('timeout');
+          
+          if (isTimeout && attempt < imageRetries) {
+            const delay = attempt * 1000;
+            console.warn(`⚠️ Timeout lors de la sauvegarde de l'image (tentative ${attempt}/${imageRetries}). Nouvelle tentative dans ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          
+          // Si c'est une erreur de connexion et qu'on a épuisé les tentatives, logger et continuer
+          // (on ne veut pas bloquer la sauvegarde du segment si l'image échoue)
+          if (isTimeout) {
+            console.error(`❌ Échec de connexion à la base de données après ${imageRetries} tentatives lors de la sauvegarde de l'image.`);
+            break; // Sortir de la boucle sans relancer l'erreur
+          }
+          
+          // Pour les autres erreurs, relancer immédiatement
+          throw imageError;
+        }
+      }
     } catch (imageError) {
       console.error(`Error generating image for segment ${segment.id}:`, imageError);
       // On continue même si l'image n'a pas pu être générée

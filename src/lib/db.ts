@@ -135,19 +135,44 @@ export class DatabaseService {
     }
   }
 
-  static async getStockDataById(id: string): Promise<StockData | null> {
-    try {
-      const [result] = await this.db
-        .select()
-        .from(schema.stockData)
-        .where(eq(schema.stockData.id, id))
-        .limit(1);
-      
-      return result || null;
-    } catch (error) {
-      console.error('Error fetching stock data by ID:', error);
-      throw new Error('Failed to fetch stock data by ID');
+  static async getStockDataById(id: string, retries = 3): Promise<StockData | null> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const [result] = await this.db
+          .select()
+          .from(schema.stockData)
+          .where(eq(schema.stockData.id, id))
+          .limit(1);
+        
+        return result || null;
+      } catch (error: any) {
+        const isTimeout = error?.code === 'ETIMEDOUT' || 
+                         error?.cause?.code === 'ETIMEDOUT' ||
+                         error?.message?.includes('fetch failed') ||
+                         error?.message?.includes('timeout');
+        
+        if (isTimeout && attempt < retries) {
+          const delay = attempt * 1000; // Délai progressif : 1s, 2s, 3s
+          console.warn(`⚠️ Timeout lors de la récupération du stock data (tentative ${attempt}/${retries}). Nouvelle tentative dans ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // Si c'est une erreur de connexion et qu'on a épuisé les tentatives, retourner null
+        // pour permettre à la page de s'afficher avec un message d'erreur
+        if (isTimeout) {
+          console.error(`❌ Échec de connexion à la base de données après ${retries} tentatives. Retour de null.`);
+          return null;
+        }
+        
+        // Pour les autres erreurs, logger et relancer
+        console.error('Error fetching stock data by ID:', error);
+        throw new Error('Failed to fetch stock data by ID');
+      }
     }
+    
+    // Ne devrait jamais arriver ici, mais au cas où
+    return null;
   }
 
   /**
