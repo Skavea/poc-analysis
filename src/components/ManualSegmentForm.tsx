@@ -172,12 +172,35 @@ export default function ManualSegmentForm({
     selectedPointsCoordinates.current = { start: null, end: null };
     lastSegmentCoordinates.current = { start: null, end: null };
     setCoordinatesReady(false);
-    // Forcer un petit délai pour permettre au graphique de se mettre à jour
-    const timer = setTimeout(() => {
-      setCoordinatesReady(true);
-    }, 100);
-    return () => clearTimeout(timer);
   }, [displayPoints]);
+  
+  // Vérifier périodiquement si les coordonnées sont prêtes (après le rendu)
+  useEffect(() => {
+    const checkCoordinates = () => {
+      const hasSelectedCoords = selectedPoints.length === 2 && 
+        selectedPointsCoordinates.current.start && 
+        selectedPointsCoordinates.current.end;
+      const hasLastSegmentCoords = existingSegments.length > 0 && 
+        lastSegmentCoordinates.current.start && 
+        lastSegmentCoordinates.current.end;
+      
+      if (hasSelectedCoords || hasLastSegmentCoords) {
+        setCoordinatesReady(true);
+      }
+    };
+    
+    // Vérifier après un court délai pour permettre au graphique de se rendre
+    const timer = setTimeout(checkCoordinates, 100);
+    // Vérifier aussi après chaque frame pour une mise à jour plus rapide
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(checkCoordinates);
+    });
+    
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(rafId);
+    };
+  }, [displayPoints, selectedPoints, existingSegments.length]);
   
   // Calculer l'index minimum de fin pour inclure le dernier segment si nécessaire
   const getMinEndIndex = useCallback(() => {
