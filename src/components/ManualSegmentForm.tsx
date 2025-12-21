@@ -489,6 +489,13 @@ export default function ManualSegmentForm({
   const handleSaveSegment = async () => {
     if (selectedPoints.length !== 2) return;
     
+    // S'assurer que les points sont triés par ordre chronologique
+    const sortedPoints = [...selectedPoints].sort((a, b) => 
+      new Date(a).getTime() - new Date(b).getTime()
+    );
+    const startTimestamp = sortedPoints[0];
+    const endTimestamp = sortedPoints[1];
+    
     setIsSaving(true);
     try {
       const response = await fetch('/api/create-manual-segment', {
@@ -498,8 +505,8 @@ export default function ManualSegmentForm({
           stockDataId,
           symbol,
           date,
-          startTimestamp: selectedPoints[0],
-          endTimestamp: selectedPoints[1],
+          startTimestamp,
+          endTimestamp,
           schemaType: schemaType !== 'UNCLASSIFIED' ? schemaType : null,
           patternPoint: patternPoint || null,
           // Envoyer le feedback du segment précédent si fourni

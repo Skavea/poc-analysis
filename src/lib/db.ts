@@ -719,6 +719,7 @@ export class DatabaseService {
     totalPoints: number;
     marketType: string;
     terminated: boolean;
+    generationMode: string;
     createdAt: Date;
     dateRange: string;
   }>> {

@@ -20,7 +20,7 @@ import {
   Heading,
   Flex,
 } from "@chakra-ui/react";
-import { BarChart3, Calendar, Database, ArrowLeft, Play } from 'lucide-react';
+import { BarChart3, Calendar, Database, ArrowLeft, Play, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
 
@@ -154,6 +154,19 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
                               <Link href={`/manual-segment/${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <Play size={18} style={{ marginRight: '8px' }} />
                                 Continuer
+                              </Link>
+                            </Button>
+                          )}
+                          {stream.terminated && stream.generationMode === 'manual' && (
+                            <Button
+                              asChild
+                              colorPalette="purple"
+                              size="md"
+                              w="full"
+                            >
+                              <Link href={`/stream-results/${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <TrendingUp size={18} style={{ marginRight: '8px' }} />
+                                Consulter les résultats
                               </Link>
                             </Button>
                           )}

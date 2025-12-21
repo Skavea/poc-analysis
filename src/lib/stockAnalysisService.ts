@@ -471,6 +471,19 @@ export class StockAnalysisService {
       return null;
     }
 
+    // Pour un segment manuel, forcer segmentStart et segmentEnd à correspondre
+    // aux timestamps sélectionnés par l'utilisateur, même si adjustSegmentSize
+    // a modifié les timestamps internes
+    // S'assurer que startTimestamp et endTimestamp sont dans le bon ordre
+    const userStartTime = new Date(startTimestamp).getTime();
+    const userEndTime = new Date(endTimestamp).getTime();
+    const finalStartTimestamp = userStartTime <= userEndTime ? startTimestamp : endTimestamp;
+    const finalEndTimestamp = userStartTime <= userEndTime ? endTimestamp : startTimestamp;
+
+    // Forcer les timestamps de début et de fin à correspondre à la sélection de l'utilisateur
+    segment.segmentStart = finalStartTimestamp;
+    segment.segmentEnd = finalEndTimestamp;
+
     // Appliquer le schemaType et patternPoint si fournis
     // Note: schemaType et patternPoint ne sont pas dans le type AnalyzedSegment
     // mais seront appliqués lors de la sauvegarde

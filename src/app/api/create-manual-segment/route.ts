@@ -44,13 +44,19 @@ export async function POST(request: NextRequest) {
     const data = stockData.data as Record<string, unknown>;
     const allTimestamps = Object.keys(data).sort();
 
-    // Trouver tous les timestamps entre startTimestamp et endTimestamp (inclus)
-    const startTime = new Date(startTimestamp).getTime();
-    const endTime = new Date(endTimestamp).getTime();
+    // S'assurer que startTimestamp < endTimestamp (inverser si nécessaire)
+    let actualStartTime = new Date(startTimestamp).getTime();
+    let actualEndTime = new Date(endTimestamp).getTime();
+    
+    if (actualStartTime > actualEndTime) {
+      // Inverser si nécessaire
+      [actualStartTime, actualEndTime] = [actualEndTime, actualStartTime];
+    }
 
+    // Trouver tous les timestamps entre startTimestamp et endTimestamp (inclus)
     const segmentTimestamps = allTimestamps.filter(ts => {
       const tsTime = new Date(ts).getTime();
-      return tsTime >= startTime && tsTime <= endTime;
+      return tsTime >= actualStartTime && tsTime <= actualEndTime;
     });
 
     if (segmentTimestamps.length < 6) {
@@ -61,13 +67,31 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculer le segment en utilisant createManualSegment
+    // Utiliser les timestamps triés pour s'assurer que start < end
     const service = StockAnalysisService.getInstance();
+    
+    // Déterminer les timestamps triés en fonction de actualStartTime et actualEndTime
+    let sortedStartTimestamp = actualStartTime === new Date(startTimestamp).getTime() 
+      ? startTimestamp 
+      : endTimestamp;
+    let sortedEndTimestamp = actualEndTime === new Date(endTimestamp).getTime() 
+      ? endTimestamp 
+      : startTimestamp;
+    
+    // Vérification supplémentaire : s'assurer que sortedStartTimestamp < sortedEndTimestamp
+    const finalStartTime = new Date(sortedStartTimestamp).getTime();
+    const finalEndTime = new Date(sortedEndTimestamp).getTime();
+    
+    if (finalStartTime > finalEndTime) {
+      // Si toujours inversé, corriger
+      [sortedStartTimestamp, sortedEndTimestamp] = [sortedEndTimestamp, sortedStartTimestamp];
+    }
     
     const segment = service.createManualSegment(
       symbol,
       date,
-      startTimestamp,
-      endTimestamp,
+      sortedStartTimestamp,
+      sortedEndTimestamp,
       data,
       schemaType || null,
       patternPoint || null
