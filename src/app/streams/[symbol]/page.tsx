@@ -20,7 +20,7 @@ import {
   Heading,
   Flex,
 } from "@chakra-ui/react";
-import { BarChart3, Calendar, Database, ArrowLeft } from 'lucide-react';
+import { BarChart3, Calendar, Database, ArrowLeft, Play } from 'lucide-react';
 import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
 
@@ -143,17 +143,33 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
                         <Box borderTop="1px" borderColor="border.default" />
                         
                         {/* Actions */}
-                        <Button
-                          asChild
-                          colorPalette="blue"
-                          size="md"
-                          w="full"
-                        >
-                          <Link href={`/analysis/${stream.symbol}?stream=${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <BarChart3 size={18} style={{ marginRight: '8px' }} />
-                            Analyze Stream
-                          </Link>
-                        </Button>
+                        <VStack gap={2} align="stretch">
+                          {!stream.terminated && (
+                            <Button
+                              asChild
+                              colorPalette="green"
+                              size="md"
+                              w="full"
+                            >
+                              <Link href={`/manual-segment/${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Play size={18} style={{ marginRight: '8px' }} />
+                                Continuer
+                              </Link>
+                            </Button>
+                          )}
+                          <Button
+                            asChild
+                            colorPalette="blue"
+                            size="md"
+                            w="full"
+                            variant={!stream.terminated ? "outline" : "solid"}
+                          >
+                            <Link href={`/analysis/${stream.symbol}?stream=${stream.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <BarChart3 size={18} style={{ marginRight: '8px' }} />
+                              Analyze Stream
+                            </Link>
+                          </Button>
+                        </VStack>
                       </VStack>
                     </Card.Body>
                   </Card.Root>

@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -21,7 +21,7 @@ import {
   Spinner,
   Input,
 } from "@chakra-ui/react";
-import { Save, ArrowRight, Copy, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Save, ArrowRight, Copy, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -87,11 +87,12 @@ export default function ManualSegmentForm({
     });
   }, [data]);
 
-  // Trouver le segment le plus récemment créé (basé sur createdAt)
+  // Trouver le segment le plus récemment créé (basé sur createdAt) pour reprendre là où on s'est arrêté
   const getLastSegmentByCreatedAt = useCallback(() => {
     if (existingSegments.length === 0) return null;
     
     // Trouver le segment avec le createdAt le plus récent (timestamp le plus grand)
+    // Cela permet de reprendre là où on s'est arrêté (le dernier segment créé)
     return existingSegments.reduce((latest, current) => {
       const currentCreatedAt = new Date(current.createdAt).getTime();
       const latestCreatedAt = new Date(latest.createdAt).getTime();
@@ -130,6 +131,7 @@ export default function ManualSegmentForm({
   }, [existingSegments, allPoints, getLastSegmentByCreatedAt]);
 
   const [startIndex, setStartIndex] = useState(getStartIndex);
+  const [pointsToDisplay, setPointsToDisplay] = useState(60); // Nombre de points à afficher (30-180)
   const [selectedPoints, setSelectedPoints] = useState<string[]>([]);
   const [schemaType, setSchemaType] = useState<'R' | 'V' | 'UNCLASSIFIED'>('UNCLASSIFIED');
   const [patternPoint, setPatternPoint] = useState<string | null>(null);
@@ -158,11 +160,82 @@ export default function ManualSegmentForm({
   // État pour le bouton de fin
   const [showEndDialog, setShowEndDialog] = useState(false);
 
-  // Points à afficher (60 points à partir de startIndex)
+  // Points à afficher (pointsToDisplay points à partir de startIndex)
   const displayPoints = useMemo(() => {
-    const endIndex = Math.min(startIndex + 60, allPoints.length);
+    const endIndex = Math.min(startIndex + pointsToDisplay, allPoints.length);
     return allPoints.slice(startIndex, endIndex);
-  }, [allPoints, startIndex]);
+  }, [allPoints, startIndex, pointsToDisplay]);
+  
+  // Réinitialiser les coordonnées SVG quand les points affichés changent
+  useEffect(() => {
+    // Réinitialiser les coordonnées pour forcer la recapture
+    selectedPointsCoordinates.current = { start: null, end: null };
+    lastSegmentCoordinates.current = { start: null, end: null };
+    setCoordinatesReady(false);
+    // Forcer un petit délai pour permettre au graphique de se mettre à jour
+    const timer = setTimeout(() => {
+      setCoordinatesReady(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [displayPoints]);
+  
+  // Calculer l'index minimum de fin pour inclure le dernier segment si nécessaire
+  const getMinEndIndex = useCallback(() => {
+    if (existingSegments.length === 0) return startIndex + 30; // Minimum 30 points
+    
+    const lastSegment = getLastSegmentByCreatedAt();
+    if (!lastSegment) return startIndex + 30;
+    
+    const lastSegmentEnd = new Date(lastSegment.segmentEnd);
+    
+    // Trouver l'index du dernier point du dernier segment
+    for (let i = allPoints.length - 1; i >= 0; i--) {
+      const pointTime = new Date(allPoints[i].timestamp);
+      if (pointTime.getTime() <= lastSegmentEnd.getTime()) {
+        // On doit afficher au moins jusqu'à ce point
+        return Math.max(i + 1, startIndex + 30);
+      }
+    }
+    
+    return startIndex + 30; // Fallback
+  }, [existingSegments, allPoints, startIndex, getLastSegmentByCreatedAt]);
+  
+  // Fonction pour réduire la plage (chevron gauche)
+  const handleDecreaseRange = () => {
+    const newPointsToDisplay = Math.max(30, pointsToDisplay - 30);
+    const minEndIndex = getMinEndIndex();
+    const currentEndIndex = startIndex + pointsToDisplay;
+    
+    // Vérifier qu'on ne va pas en dessous du minimum requis
+    if (startIndex + newPointsToDisplay < minEndIndex) {
+      // Ajuster pour respecter le minimum
+      const adjustedPoints = minEndIndex - startIndex;
+      if (adjustedPoints >= 30) {
+        setPointsToDisplay(adjustedPoints);
+      }
+      return;
+    }
+    
+    setPointsToDisplay(newPointsToDisplay);
+  };
+  
+  // Fonction pour augmenter la plage (chevron droit)
+  const handleIncreaseRange = () => {
+    const newPointsToDisplay = Math.min(180, pointsToDisplay + 30);
+    const maxEndIndex = allPoints.length;
+    
+    // Vérifier qu'on ne dépasse pas la fin des données
+    if (startIndex + newPointsToDisplay > maxEndIndex) {
+      setPointsToDisplay(maxEndIndex - startIndex);
+      return;
+    }
+    
+    setPointsToDisplay(newPointsToDisplay);
+  };
+  
+  // Vérifier si les boutons doivent être désactivés
+  const canDecrease = pointsToDisplay > 30 && (startIndex + pointsToDisplay - 30) >= getMinEndIndex();
+  const canIncrease = pointsToDisplay < 180 && (startIndex + pointsToDisplay + 30) <= allPoints.length;
 
   // Trouver les points extrêmes du dernier segment pour l'affichage
   const lastSegmentPoints = useMemo(() => {
@@ -425,7 +498,9 @@ export default function ManualSegmentForm({
         setPatternPoint(null);
         setIsResultCorrect(null);
         setResultInterval('');
-        setStartIndex(getStartIndex());
+        const newStartIndex = getStartIndex();
+        setStartIndex(newStartIndex);
+        setPointsToDisplay(60); // Réinitialiser à 60 points
       } else {
         alert(result.error || 'Erreur lors de la création du segment');
       }
@@ -454,7 +529,7 @@ export default function ManualSegmentForm({
     const uValue = lastCreatedSegment.u ? Number(lastCreatedSegment.u).toFixed(2) : '0.00';
     const segmentId = lastCreatedSegment.id;
     const x0Date = new Date(lastCreatedSegment.segmentEnd);
-    const x0DateStr = `${x0Date.getDate().toString().padStart(2, '0')}/${(x0Date.getMonth() + 1).toString().padStart(2, '0')}/${x0Date.getFullYear()} ${x0Date.getHours().toString().padStart(2, '0')}:${x0Date.getMinutes().toString().padStart(2, '0')}`;
+    const x0DateStr = `${x0Date.getUTCDate().toString().padStart(2, '0')}/${(x0Date.getUTCMonth() + 1).toString().padStart(2, '0')}/${x0Date.getUTCFullYear()} ${x0Date.getUTCHours().toString().padStart(2, '0')}:${x0Date.getUTCMinutes().toString().padStart(2, '0')}`;
     
     const data = `${rvValue} ${trendValue} ${uValue} ${segmentId} ${x0DateStr}\n${lastCreatedSegment.redPointsFormatted || ''}\n${lastCreatedSegment.greenPointsFormatted || ''}`;
     
@@ -511,7 +586,7 @@ export default function ManualSegmentForm({
     const uValue = lastCreatedSegment.u ? Number(lastCreatedSegment.u).toFixed(2) : '0.00';
     const segmentId = lastCreatedSegment.id;
     const x0Date = new Date(lastCreatedSegment.segmentEnd);
-    const x0DateStr = `${x0Date.getDate().toString().padStart(2, '0')}/${(x0Date.getMonth() + 1).toString().padStart(2, '0')}/${x0Date.getFullYear()} ${x0Date.getHours().toString().padStart(2, '0')}:${x0Date.getMinutes().toString().padStart(2, '0')}`;
+    const x0DateStr = `${x0Date.getUTCDate().toString().padStart(2, '0')}/${(x0Date.getUTCMonth() + 1).toString().padStart(2, '0')}/${x0Date.getUTCFullYear()} ${x0Date.getUTCHours().toString().padStart(2, '0')}:${x0Date.getUTCMinutes().toString().padStart(2, '0')}`;
     
     return (
       <VStack gap={6} align="stretch">
@@ -576,14 +651,36 @@ export default function ManualSegmentForm({
             </Heading>
             <HStack gap={4} flexWrap="wrap">
               <Badge colorPalette="blue" variant="subtle">
-                Plage: {firstDate ? new Date(firstDate).toLocaleDateString('fr-FR') : 'N/A'} - {lastDate ? new Date(lastDate).toLocaleDateString('fr-FR') : 'N/A'}
+                Plage: {firstDate ? (() => {
+                  const date = new Date(firstDate);
+                  return `${date.getUTCDate().toString().padStart(2, '0')}/${(date.getUTCMonth() + 1).toString().padStart(2, '0')}/${date.getUTCFullYear()}`;
+                })() : 'N/A'} - {lastDate ? (() => {
+                  const date = new Date(lastDate);
+                  return `${date.getUTCDate().toString().padStart(2, '0')}/${(date.getUTCMonth() + 1).toString().padStart(2, '0')}/${date.getUTCFullYear()}`;
+                })() : 'N/A'}
               </Badge>
               <Badge colorPalette="green" variant="subtle">
                 Points traités: {processedPoints} / {totalPoints}
               </Badge>
               <Badge colorPalette="purple" variant="subtle">
-                Segments créés: {segmentsCount}
+                Segments traités: {segmentsCount}
               </Badge>
+              {(() => {
+                // Calculer le pourcentage de réussite basé sur les segments avec feedback
+                const segmentsWithFeedback = existingSegments.filter(seg => seg.isResultCorrect !== null);
+                const successfulSegments = segmentsWithFeedback.filter(seg => seg.isResultCorrect === true);
+                const totalFeedbackSegments = segmentsWithFeedback.length;
+                const successRate = totalFeedbackSegments > 0 
+                  ? ((successfulSegments.length / totalFeedbackSegments) * 100).toFixed(1) 
+                  : '0';
+                const successFraction = `${successfulSegments.length} / ${totalFeedbackSegments}`;
+                
+                return (
+                  <Badge colorPalette="orange" variant="subtle">
+                    Réussite: {successRate}% ({successFraction})
+                  </Badge>
+                );
+              })()}
             </HStack>
           </VStack>
         </Card.Header>
@@ -647,9 +744,29 @@ export default function ManualSegmentForm({
       {/* Graphique interactif */}
       <Card.Root>
         <Card.Header>
-          <Text fontSize="lg" fontWeight="bold" color="fg.default">
-            Sélection des points du segment
-          </Text>
+          <HStack justify="space-between" align="center" w="100%">
+            <Button
+              onClick={handleDecreaseRange}
+              disabled={!canDecrease}
+              size="sm"
+              variant="ghost"
+              colorPalette="gray"
+            >
+              <ChevronLeft size={20} />
+            </Button>
+            <Text fontSize="lg" fontWeight="bold" color="fg.default">
+              Sélection des points du segment
+            </Text>
+            <Button
+              onClick={handleIncreaseRange}
+              disabled={!canIncrease}
+              size="sm"
+              variant="ghost"
+              colorPalette="gray"
+            >
+              <ChevronRight size={20} />
+            </Button>
+          </HStack>
         </Card.Header>
         <Card.Body>
           <Box ref={chartContainerRef} height="400px" position="relative">
@@ -810,6 +927,7 @@ export default function ManualSegmentForm({
             })()}
             <ResponsiveContainer width="100%" height="100%">
               <LineChart 
+                key={`chart-${startIndex}-${pointsToDisplay}`}
                 data={chartData} 
                 margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 onClick={handleChartClick}
@@ -1112,10 +1230,10 @@ export default function ManualSegmentForm({
                 )}
               </Button>
               
-              {previousSegment && (
+              {existingSegments.length > 0 && (
                 <Button
                   onClick={handleEnd}
-                  disabled={isSaving || isResultCorrect === null}
+                  disabled={isSaving || (previousSegment !== null && isResultCorrect === null)}
                   colorPalette="red"
                   size="lg"
                   variant="solid"

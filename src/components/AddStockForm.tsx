@@ -48,15 +48,18 @@ export default function AddStockForm() {
         method: 'POST',
         body: formData,
       });
-
+      
       const data = await response.json();
 
       if (response.ok && data.success) {
         setSelectedFile(null);
         
-        // Si mode manuel, rediriger vers la page de création manuelle
-        if (generationMode === 'manual' && data.data?.id) {
-          window.location.href = `/manual-segment/${data.data.id}`;
+        // Si mode manuel et qu'un stream non terminé existe, rediriger vers le formulaire
+        if (generationMode === 'manual' && data.data?.firstNonTerminatedStreamId) {
+          window.location.href = `/manual-segment/${data.data.firstNonTerminatedStreamId}`;
+        } else if (generationMode === 'manual' && data.data?.streams?.[0]?.id) {
+          // Fallback: utiliser le premier stream si firstNonTerminatedStreamId n'est pas disponible
+          window.location.href = `/manual-segment/${data.data.streams[0].id}`;
         } else {
           alert(data.message || 'Fichier traité avec succès !');
           window.location.reload();

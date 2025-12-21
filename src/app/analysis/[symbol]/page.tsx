@@ -11,11 +11,12 @@
 
 import { use } from 'react';
 import { DatabaseService } from '@/lib/db';
-import { TrendingUp, TrendingDown, Clock, BarChart3, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, BarChart3, ArrowRight, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import AnalysisStatusScript from '@/components/AnalysisStatusScript';
 import ClientAnalysisStatus from '@/components/ClientAnalysisStatus';
 import AdvancedAnalysisFilter from '@/components/AdvancedAnalysisFilter';
+import DeleteSegmentButton from '@/components/DeleteSegmentButton';
 import {
   Box,
   VStack,
@@ -53,6 +54,8 @@ async function AnalysisStatsServer({
     filter?: string;
     schema?: string | string[];
     pattern?: string | string[];
+    mlClassed?: string | string[];
+    mlResult?: string | string[];
     stream?: string;
   };
   setHasExistingAnalysis?: (value: boolean) => void;
@@ -61,6 +64,25 @@ async function AnalysisStatsServer({
   const results = searchParams.stream 
     ? await DatabaseService.getAnalysisResultsByStreamId(searchParams.stream)
     : await DatabaseService.getAnalysisResults(symbol);
+  
+  // Vérifier si le stream est terminé et trouver le dernier segment créé
+  let isStreamTerminated = true;
+  let lastSegmentId: string | null = null;
+  
+  if (searchParams.stream) {
+    const stream = await DatabaseService.getStockDataById(searchParams.stream);
+    isStreamTerminated = stream?.terminated ?? true;
+    
+    // Trouver le dernier segment créé (created_at le plus récent) pour ce stream
+    if (results.length > 0 && !isStreamTerminated) {
+      const lastSegment = results.reduce((latest, current) => {
+        const currentCreatedAt = new Date(current.createdAt).getTime();
+        const latestCreatedAt = new Date(latest.createdAt).getTime();
+        return currentCreatedAt > latestCreatedAt ? current : latest;
+      });
+      lastSegmentId = lastSegment.id;
+    }
+  }
   
   const rCount = results.filter(r => r.schemaType === 'R').length;
   const vCount = results.filter(r => r.schemaType === 'V').length;
@@ -279,11 +301,13 @@ async function AnalysisStatsServer({
                 }}
                 transition="all 0.2s"
                 cursor="pointer"
-                asChild
               >
-                <Link href={`/segment/${encodeURIComponent(result.id)}${searchParams.stream ? `?stream=${searchParams.stream}` : ''}`}>
-                  <Card.Header pb={3}>
-                    <Flex align="center" justify="space-between">
+                <Card.Header pb={3}>
+                  <Flex align="center" justify="space-between">
+                    <Link 
+                      href={`/segment/${encodeURIComponent(result.id)}${searchParams.stream ? `?stream=${searchParams.stream}` : ''}`}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
                       <HStack gap={2}>
                         {result.trendDirection === 'UP' ? (
                           <TrendingUp size={20} color="var(--chakra-colors-green-600)" />
@@ -294,7 +318,15 @@ async function AnalysisStatsServer({
                           {result.trendDirection}
                         </Text>
                       </HStack>
-                      <HStack gap={2}>
+                    </Link>
+                    <HStack gap={2}>
+                      {searchParams.stream && !isStreamTerminated && (
+                        <DeleteSegmentButton
+                          segmentId={result.id}
+                          streamId={searchParams.stream}
+                          isLastSegment={result.id === lastSegmentId}
+                        />
+                      )}
                         <Badge
                           colorPalette={
                             result.schemaType === 'R' ? 'red' :
@@ -327,38 +359,42 @@ async function AnalysisStatsServer({
                   </Card.Header>
 
                   <Card.Body pt={0}>
-                    <VStack gap={4} align="stretch">
-                      <HStack gap={2} justify="space-between">
-                        <HStack gap={2}>
-                          <Clock size={16} color="var(--chakra-colors-gray-500)" />
-                          <Text fontSize="sm" color="fg.muted">
-                            {formatTime(result.segmentStart.toISOString())} - {formatTime(result.segmentEnd.toISOString())}
+                    <Link 
+                      href={`/segment/${encodeURIComponent(result.id)}${searchParams.stream ? `?stream=${searchParams.stream}` : ''}`}
+                      style={{ display: 'block' }}
+                    >
+                      <VStack gap={4} align="stretch">
+                        <HStack gap={2} justify="space-between">
+                          <HStack gap={2}>
+                            <Clock size={16} color="var(--chakra-colors-gray-500)" />
+                            <Text fontSize="sm" color="fg.muted">
+                              {formatTime(result.segmentStart.toISOString())} - {formatTime(result.segmentEnd.toISOString())}
+                            </Text>
+                          </HStack>
+                          <Text fontSize="sm" color="fg.muted" fontWeight="medium">
+                            {formatDate(result.date)}
                           </Text>
                         </HStack>
-                        <Text fontSize="sm" color="fg.muted" fontWeight="medium">
-                          {formatDate(result.date)}
-                        </Text>
-                      </HStack>
-                      
-                      <HStack gap={4} justify="space-between" fontSize="sm">
-                        <Text color="fg.muted">{result.pointCount} pts</Text>
-                        <HStack gap={4}>
-                          <Text color="fg.default" fontWeight="medium">x0: ${Number(result.x0).toFixed(2)}</Text>
-                          <Text color="fg.muted">Avg: ${Number(result.averagePrice).toFixed(2)}</Text>
+                        
+                        <HStack gap={4} justify="space-between" fontSize="sm">
+                          <Text color="fg.muted">{result.pointCount} pts</Text>
+                          <HStack gap={4}>
+                            <Text color="fg.default" fontWeight="medium">x0: ${Number(result.x0).toFixed(2)}</Text>
+                            <Text color="fg.muted">Avg: ${Number(result.averagePrice).toFixed(2)}</Text>
+                          </HStack>
                         </HStack>
-                      </HStack>
 
-                      <Box borderTop="1px" borderColor="border.default" />
+                        <Box borderTop="1px" borderColor="border.default" />
 
-                      <HStack gap={2} justify="center">
-                        <Text fontSize="sm" color="blue.600" fontWeight="medium">
-                          Click to view details
-                        </Text>
-                        <ArrowRight size={16} color="var(--chakra-colors-blue-600)" />
-                      </HStack>
-                    </VStack>
+                        <HStack gap={2} justify="center">
+                          <Text fontSize="sm" color="blue.600" fontWeight="medium">
+                            Click to view details
+                          </Text>
+                          <ArrowRight size={16} color="var(--chakra-colors-blue-600)" />
+                        </HStack>
+                      </VStack>
+                    </Link>
                   </Card.Body>
-                </Link>
               </Card.Root>
             </GridItem>
           ))}

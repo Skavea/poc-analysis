@@ -214,73 +214,102 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const totalPoints = Object.keys(data).length;
-    const id = `${symbol}_${date}`;
-
-    console.log(`📊 Upload de données pour ${symbol} - ${date} (${totalPoints} points)`);
-
-    // Sauvegarder en base de données
-    await sql`
-      INSERT INTO stock_data (id, symbol, date, data, total_points, market_type)
-      VALUES (${id}, ${symbol}, ${date}, ${JSON.stringify(data)}, ${totalPoints}, 'STOCK')
-      ON CONFLICT (id) DO UPDATE SET
-        data = EXCLUDED.data,
-        total_points = EXCLUDED.total_points,
-        created_at = CURRENT_TIMESTAMP
-    `;
-
-    console.log(`✅ Données sauvegardées pour ${symbol} - ${date}`);
-
-    let segmentsCreated = 0;
-    let analysisMessage = '';
-
-    // Si mode manuel, ne pas créer les segments maintenant
-    if (mode === 'manual') {
-      analysisMessage = 'Mode manuel activé. Vous pourrez définir les segments via le formulaire.';
-      console.log(`📝 Mode manuel: les segments seront créés manuellement`);
-    } else {
-      // Mode auto : créer les segments automatiquement
-    // Vérifier si une analyse existe déjà pour ce symbole
-    const existingAnalysis = await sql`
-      SELECT COUNT(*) as count FROM analysis_results 
-      WHERE symbol = ${symbol}
-    `;
-
-    if (existingAnalysis[0].count > 0) {
-      analysisMessage = `Analyse déjà existante pour ${symbol} (${existingAnalysis[0].count} segments).`;
-      console.log(`⚠️ ${analysisMessage}`);
-    } else {
-      try {
-        // Lancer l'analyse automatique des segments
-        console.log(`🔍 Lancement de l'analyse des segments pour ${symbol}...`);
-        const service = StockAnalysisService.getInstance();
-        const segments = service.extractSegments(symbol, data);
-        
-        if (segments.length > 0) {
-          await service.saveAnalysisResults(segments, id);
-          segmentsCreated = segments.length;
-          analysisMessage = `${segments.length} segments créés avec succès.`;
-          console.log(`✅ ${analysisMessage}`);
-        } else {
-          analysisMessage = 'Aucun segment détecté dans les données.';
-          console.log(`⚠️ ${analysisMessage}`);
-        }
-      } catch (analysisError) {
-        console.error('Erreur lors de l\'analyse:', analysisError);
-        analysisMessage = 'Erreur lors de l\'analyse des segments.';
+    // Découper les données par jour
+    const dataByDay: Record<string, Record<string, any>> = {};
+    const timestamps = Object.keys(data).sort();
+    
+    for (const timestamp of timestamps) {
+      const dateObj = new Date(timestamp);
+      const dayKey = dateObj.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      
+      if (!dataByDay[dayKey]) {
+        dataByDay[dayKey] = {};
+      }
+      
+      dataByDay[dayKey][timestamp] = data[timestamp];
+    }
+    
+    const days = Object.keys(dataByDay).sort();
+    console.log(`📅 Données découpées en ${days.length} jour(s): ${days.join(', ')}`);
+    
+    // Créer un stream (stock_data) pour chaque jour
+    const createdStreams: Array<{ id: string; date: string; totalPoints: number }> = [];
+    let totalSegmentsCreated = 0;
+    let firstNonTerminatedStreamId: string | null = null;
+    
+    for (const dayDate of days) {
+      const dayData = dataByDay[dayDate];
+      const dayTotalPoints = Object.keys(dayData).length;
+      const streamId = `${symbol}_${dayDate}`;
+      
+      // Sauvegarder le stream avec terminated=false et generation_mode selon le mode
+      const generationModeValue = mode === 'manual' ? 'manual' : 'auto';
+      await sql`
+        INSERT INTO stock_data (id, symbol, date, data, total_points, market_type, terminated, generation_mode)
+        VALUES (${streamId}, ${symbol}, ${dayDate}, ${JSON.stringify(dayData)}, ${dayTotalPoints}, 'STOCK', false, ${generationModeValue})
+        ON CONFLICT (id) DO UPDATE SET
+          data = EXCLUDED.data,
+          total_points = EXCLUDED.total_points,
+          terminated = false,
+          generation_mode = ${generationModeValue},
+          created_at = CURRENT_TIMESTAMP
+      `;
+      
+      createdStreams.push({ id: streamId, date: dayDate, totalPoints: dayTotalPoints });
+      
+      // Si c'est le premier stream non terminé, le garder pour la redirection
+      if (!firstNonTerminatedStreamId) {
+        firstNonTerminatedStreamId = streamId;
+      }
+      
+      console.log(`✅ Stream créé: ${streamId} (${dayTotalPoints} points)`);
+      
+      // Si mode auto, générer les segments pour ce stream
+      if (mode === 'auto') {
+        try {
+          const service = StockAnalysisService.getInstance();
+          const segments = service.extractSegments(symbol, dayData);
+          
+          if (segments.length > 0) {
+            await service.saveAnalysisResults(segments, streamId);
+            totalSegmentsCreated += segments.length;
+            console.log(`✅ ${segments.length} segments créés pour ${streamId}`);
+            
+            // Marquer le stream comme terminé
+            await sql`
+              UPDATE stock_data
+              SET terminated = true
+              WHERE id = ${streamId}
+            `;
+            console.log(`✅ Stream ${streamId} marqué comme terminé`);
+          } else {
+            console.log(`⚠️ Aucun segment détecté pour ${streamId}`);
+            // Même sans segments, on marque comme terminé
+            await sql`
+              UPDATE stock_data
+              SET terminated = true
+              WHERE id = ${streamId}
+            `;
+          }
+        } catch (analysisError) {
+          console.error(`❌ Erreur lors de l'analyse pour ${streamId}:`, analysisError);
+          // En cas d'erreur, on laisse terminated=false pour pouvoir reprendre
         }
       }
     }
+    
+    const analysisMessage = mode === 'manual' 
+      ? `Mode manuel activé. ${createdStreams.length} stream(s) créé(s). Vous pourrez définir les segments via le formulaire.`
+      : `${totalSegmentsCreated} segments créés pour ${createdStreams.length} stream(s).`;
 
     return NextResponse.json({
       success: true,
-      message: `Données de marché ${symbol} (${date}) uploadées avec succès ! ${totalPoints} points traités. ${analysisMessage}`,
+      message: `Données de marché ${symbol} uploadées avec succès ! ${Object.keys(data).length} points traités sur ${days.length} jour(s). ${analysisMessage}`,
       data: {
         symbol,
-        date,
-        totalPoints,
-        id,
-        segmentsCreated
+        streams: createdStreams,
+        totalSegmentsCreated,
+        firstNonTerminatedStreamId: mode === 'manual' ? firstNonTerminatedStreamId : null
       }
     });
 

@@ -23,7 +23,7 @@ import {
 import { createAnalysisResultImage } from './chartImageGenerator';
 
 // Type pour getAllStockData sans la colonne data (trop volumineuse)
-type StockDataSummary = Omit<StockData, 'data'>;
+type StockDataSummary = Omit<StockData, 'data'> & { terminated: boolean; generationMode: string };
 
 // Environment validation function
 function validateEnvironment() {
@@ -332,6 +332,8 @@ export class DatabaseService {
           date: schema.stockData.date,
           totalPoints: schema.stockData.totalPoints,
           marketType: schema.stockData.marketType,
+          terminated: schema.stockData.terminated,
+          generationMode: schema.stockData.generationMode,
           createdAt: schema.stockData.createdAt
           // Exclure la colonne 'data' qui est trop volumineuse
         })
@@ -691,6 +693,7 @@ export class DatabaseService {
     date: string;
     totalPoints: number;
     marketType: string;
+    terminated: boolean;
     createdAt: Date;
     dateRange: string;
   }>> {
@@ -702,6 +705,8 @@ export class DatabaseService {
           date: schema.stockData.date,
           totalPoints: schema.stockData.totalPoints,
           marketType: schema.stockData.marketType,
+          terminated: schema.stockData.terminated,
+          generationMode: schema.stockData.generationMode,
           createdAt: schema.stockData.createdAt,
           data: schema.stockData.data
         })
@@ -717,6 +722,8 @@ export class DatabaseService {
           date: stream.date,
           totalPoints: stream.totalPoints,
           marketType: stream.marketType,
+          terminated: stream.terminated,
+          generationMode: stream.generationMode,
           createdAt: stream.createdAt,
           dateRange
         };

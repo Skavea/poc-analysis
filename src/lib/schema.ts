@@ -18,10 +18,14 @@ export const stockData = pgTable('stock_data', {
   data: jsonb('data').notNull(),
   totalPoints: integer('total_points').notNull(),
   marketType: varchar('market_type', { length: 20 }).default('STOCK').notNull(),
+  terminated: boolean('terminated').default(false).notNull(),
+  generationMode: varchar('generation_mode', { length: 20 }).default('auto').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   marketTypeCheck: check('stock_data_market_type_check', 
     sql`${table.marketType} IN ('STOCK', 'CRYPTOCURRENCY', 'COMMODITY', 'INDEX')`),
+  generationModeCheck: check('stock_data_generation_mode_check', 
+    sql`${table.generationMode} IN ('auto', 'manual')`),
   symbolMarketDateUnique: unique('stock_data_symbol_market_date_unique')
     .on(table.symbol, table.marketType, table.date),
 }));
