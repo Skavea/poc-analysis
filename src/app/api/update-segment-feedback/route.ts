@@ -10,7 +10,7 @@ import { neon } from '@neondatabase/serverless';
 
 export async function POST(request: NextRequest) {
   try {
-    const { segmentId, isResultCorrect, resultInterval } = await request.json();
+    const { segmentId, isResultCorrect, resultInterval, result } = await request.json();
 
     if (!segmentId || !isResultCorrect || !isResultCorrect.trim()) {
       return NextResponse.json(
@@ -27,8 +27,9 @@ export async function POST(request: NextRequest) {
 
     await sql`
       UPDATE analysis_results
-      SET is_result_correct = ${isResultCorrect},
-          result_interval = ${resultInterval && resultInterval.trim() ? resultInterval.trim() : null}
+      SET is_result_correct = ${isResultCorrect && isResultCorrect.trim() ? isResultCorrect.trim() : null},
+          result_interval = ${resultInterval && resultInterval.trim() ? resultInterval.trim() : null},
+          result = ${result && result.trim() ? result.trim() : null}
       WHERE id = ${segmentId}
     `;
 

@@ -152,6 +152,7 @@ export default function ManualSegmentForm({
   // États pour le feedback du segment précédent
   const [isResultCorrect, setIsResultCorrect] = useState<string>('');
   const [resultInterval, setResultInterval] = useState<string>('');
+  const [resultValue, setResultValue] = useState<string>('');
   
   // État pour l'écran de confirmation
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -505,6 +506,7 @@ export default function ManualSegmentForm({
           previousSegmentId: previousSegment?.id || null,
           isResultCorrect: isResultCorrect.trim() || null,
           resultInterval: resultInterval.trim() || null,
+          result: resultValue.trim() || null,
         }),
       });
 
@@ -521,6 +523,7 @@ export default function ManualSegmentForm({
         setPatternPoint(null);
         setIsResultCorrect('');
         setResultInterval('');
+        setResultValue('');
         const newStartIndex = getStartIndex();
         setStartIndex(newStartIndex);
         setPointsToDisplay(60); // Réinitialiser à 60 points
@@ -581,6 +584,7 @@ export default function ManualSegmentForm({
           segmentId: previousSegment.id,
           isResultCorrect: isResultCorrect.trim() || null,
           resultInterval: resultInterval.trim() || null,
+          result: resultValue.trim() || null,
         }),
       });
 
@@ -748,6 +752,19 @@ export default function ManualSegmentForm({
                 />
                 <Field.HelperText>
                   Durée(s) en minutes entre la fin du segment et la réalisation du résultat. Vous pouvez saisir plusieurs nombres séparés par des espaces. Le nombre de valeurs doit correspondre au nombre de valeurs de résultat.
+                </Field.HelperText>
+              </Field.Root>
+
+              <Field.Root>
+                <Field.Label>Résultat</Field.Label>
+                <Input
+                  type="text"
+                  value={resultValue}
+                  onChange={(e) => setResultValue(e.target.value)}
+                  placeholder="Saisir le résultat du segment précédent"
+                />
+                <Field.HelperText>
+                  Résultat du segment précédent
                 </Field.HelperText>
               </Field.Root>
             </VStack>
