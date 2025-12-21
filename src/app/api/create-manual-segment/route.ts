@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     await service.saveManualSegment(segment, stockDataId, schemaType || null, patternPoint || null);
 
     // Si un feedback est fourni pour le segment précédent, le sauvegarder
-    if (previousSegmentId && isResultCorrect !== null && isResultCorrect !== undefined) {
+    if (previousSegmentId && isResultCorrect && isResultCorrect.trim()) {
       const { neon } = await import('@neondatabase/serverless');
       const databaseUrl = process.env.DATABASE_URL;
       if (!databaseUrl) {
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       await sql`
         UPDATE analysis_results
         SET is_result_correct = ${isResultCorrect},
-            result_interval = ${resultInterval || null}
+            result_interval = ${resultInterval && resultInterval.trim() ? resultInterval.trim() : null}
         WHERE id = ${previousSegmentId}
       `;
     }

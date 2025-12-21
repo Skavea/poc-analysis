@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const { segmentId, isResultCorrect, resultInterval } = await request.json();
 
-    if (!segmentId || isResultCorrect === null || isResultCorrect === undefined) {
+    if (!segmentId || !isResultCorrect || !isResultCorrect.trim()) {
       return NextResponse.json(
         { error: 'Paramètres manquants' },
         { status: 400 }
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     await sql`
       UPDATE analysis_results
       SET is_result_correct = ${isResultCorrect},
-          result_interval = ${resultInterval || null}
+          result_interval = ${resultInterval && resultInterval.trim() ? resultInterval.trim() : null}
       WHERE id = ${segmentId}
     `;
 

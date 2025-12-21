@@ -62,8 +62,8 @@ export const analysisResults = pgTable('analysis_results', {
   greenPointsFormatted: text('green_points_formatted'), // Points verts formatés en texte
   blackPointsCount: integer('black_points_count'), // Nombre de points noirs (variations strictes + 1)
   invalid: boolean('invalid').default(false).notNull(), // Indique si le segment a une séquence continue d'une minute
-  isResultCorrect: boolean('is_result_correct'), // Indique si le résultat du segment précédent est correct (null par défaut)
-  resultInterval: real('result_interval'), // Intervalle de temps pour que le résultat se réalise (null par défaut)
+  isResultCorrect: text('is_result_correct'), // Indique si le résultat du segment précédent est correct (chaîne avec valeurs 0-1 séparées par espaces, null par défaut)
+  resultInterval: text('result_interval'), // Intervalle(s) de temps pour que le résultat se réalise (chaîne avec nombres séparés par espaces, null par défaut)
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   trendDirectionCheck: check('trend_direction_check', sql`${table.trendDirection} IN ('UP', 'DOWN')`),

@@ -21,7 +21,7 @@ import {
   Spinner,
   Input,
 } from "@chakra-ui/react";
-import { Save, ArrowRight, Copy, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Save, ArrowRight, Copy, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -150,7 +150,7 @@ export default function ManualSegmentForm({
   const [coordinatesReady, setCoordinatesReady] = useState(false);
   
   // États pour le feedback du segment précédent
-  const [isResultCorrect, setIsResultCorrect] = useState<boolean | null>(null);
+  const [isResultCorrect, setIsResultCorrect] = useState<string>('');
   const [resultInterval, setResultInterval] = useState<string>('');
   
   // État pour l'écran de confirmation
@@ -503,8 +503,8 @@ export default function ManualSegmentForm({
           patternPoint: patternPoint || null,
           // Envoyer le feedback du segment précédent si fourni
           previousSegmentId: previousSegment?.id || null,
-          isResultCorrect: isResultCorrect !== null ? isResultCorrect : null,
-          resultInterval: resultInterval ? parseFloat(resultInterval) : null,
+          isResultCorrect: isResultCorrect.trim() || null,
+          resultInterval: resultInterval.trim() || null,
         }),
       });
 
@@ -519,7 +519,7 @@ export default function ManualSegmentForm({
         setSelectedPoints([]);
         setSchemaType('UNCLASSIFIED');
         setPatternPoint(null);
-        setIsResultCorrect(null);
+        setIsResultCorrect('');
         setResultInterval('');
         const newStartIndex = getStartIndex();
         setStartIndex(newStartIndex);
@@ -566,7 +566,7 @@ export default function ManualSegmentForm({
 
   // Gérer la fin (ne plus générer de segments)
   const handleEnd = async () => {
-    if (!previousSegment || isResultCorrect === null) return;
+    if (!previousSegment || !isResultCorrect.trim()) return;
     
     if (!confirm('Êtes-vous sûr de vouloir terminer ? Le feedback du segment précédent sera enregistré.')) {
       return;
@@ -579,8 +579,8 @@ export default function ManualSegmentForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           segmentId: previousSegment.id,
-          isResultCorrect,
-          resultInterval: resultInterval ? parseFloat(resultInterval) : null,
+          isResultCorrect: isResultCorrect.trim() || null,
+          resultInterval: resultInterval.trim() || null,
         }),
       });
 
@@ -690,8 +690,14 @@ export default function ManualSegmentForm({
               </Badge>
               {(() => {
                 // Calculer le pourcentage de réussite basé sur les segments avec feedback
-                const segmentsWithFeedback = existingSegments.filter(seg => seg.isResultCorrect !== null);
-                const successfulSegments = segmentsWithFeedback.filter(seg => seg.isResultCorrect === true);
+                const segmentsWithFeedback = existingSegments.filter(seg => seg.isResultCorrect !== null && seg.isResultCorrect.trim() !== '');
+                // Compter les segments réussis : ceux avec au moins une valeur >= 0.5
+                const successfulSegments = segmentsWithFeedback.filter(seg => {
+                  if (!seg.isResultCorrect) return false;
+                  const values = seg.isResultCorrect.trim().split(/\s+/).map(v => parseFloat(v));
+                  // Un segment est réussi si au moins une valeur est >= 0.5
+                  return values.some(v => !isNaN(v) && v >= 0.5);
+                });
                 const totalFeedbackSegments = segmentsWithFeedback.length;
                 const successRate = totalFeedbackSegments > 0 
                   ? ((successfulSegments.length / totalFeedbackSegments) * 100).toFixed(1) 
@@ -720,45 +726,30 @@ export default function ManualSegmentForm({
           <Card.Body>
             <VStack gap={4} align="stretch">
               <Field.Root>
-                <Field.Label>Le résultat du segment précédent est-il correct ?</Field.Label>
-                <HStack gap={3}>
-                  <Button
-                    variant={isResultCorrect === true ? 'solid' : 'outline'}
-                    colorPalette={isResultCorrect === true ? 'green' : 'gray'}
-                    onClick={() => setIsResultCorrect(true)}
-                    flex={1}
-                  >
-                    <CheckCircle size={16} style={{ marginRight: '8px' }} />
-                    Oui
-                  </Button>
-                  <Button
-                    variant={isResultCorrect === false ? 'solid' : 'outline'}
-                    colorPalette={isResultCorrect === false ? 'red' : 'gray'}
-                    onClick={() => setIsResultCorrect(false)}
-                    flex={1}
-                  >
-                    <XCircle size={16} style={{ marginRight: '8px' }} />
-                    Non
-                  </Button>
-                </HStack>
+                <Field.Label>Résultat(s) du segment précédent (valeurs entre 0 et 1)</Field.Label>
+                <Input
+                  type="text"
+                  value={isResultCorrect}
+                  onChange={(e) => setIsResultCorrect(e.target.value)}
+                  placeholder="Ex: 1 ou 0.8 0.5 1 0.9 (plusieurs valeurs 0-1 séparées par des espaces)"
+                />
+                <Field.HelperText>
+                  Valeur(s) de correction du résultat (0 = incorrect, 1 = correct, valeurs décimales entre 0 et 1 possibles). Vous pouvez saisir plusieurs valeurs séparées par des espaces, une pour chaque intervalle.
+                </Field.HelperText>
               </Field.Root>
 
-              {isResultCorrect !== null && (
-                <Field.Root>
-                  <Field.Label>Intervalle de temps (en minutes) pour que le résultat se réalise</Field.Label>
-                  <Input
-                    type="number"
-                    value={resultInterval}
-                    onChange={(e) => setResultInterval(e.target.value)}
-                    placeholder="Ex: 15"
-                    min="0"
-                    step="0.1"
-                  />
-                  <Field.HelperText>
-                    Durée en minutes entre la fin du segment et la réalisation du résultat
-                  </Field.HelperText>
-                </Field.Root>
-              )}
+              <Field.Root>
+                <Field.Label>Intervalle(s) de temps (en minutes) pour que le résultat se réalise</Field.Label>
+                <Input
+                  type="text"
+                  value={resultInterval}
+                  onChange={(e) => setResultInterval(e.target.value)}
+                  placeholder="Ex: 30 ou 30 60 90 (plusieurs nombres séparés par des espaces)"
+                />
+                <Field.HelperText>
+                  Durée(s) en minutes entre la fin du segment et la réalisation du résultat. Vous pouvez saisir plusieurs nombres séparés par des espaces. Le nombre de valeurs doit correspondre au nombre de valeurs de résultat.
+                </Field.HelperText>
+              </Field.Root>
             </VStack>
           </Card.Body>
         </Card.Root>
@@ -1252,7 +1243,7 @@ export default function ManualSegmentForm({
               {existingSegments.length > 0 && (
                 <Button
                   onClick={handleEnd}
-                  disabled={isSaving || (previousSegment !== null && isResultCorrect === null)}
+                  disabled={isSaving || (previousSegment !== null && !isResultCorrect.trim())}
                   colorPalette="red"
                   size="lg"
                   variant="solid"
