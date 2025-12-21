@@ -1040,10 +1040,8 @@ export default function ManualSegmentForm({
                       const pointTime = new Date(timestamp).getTime();
                       if (pointTime === startTime) {
                         selectedPointsCoordinates.current.start = { x: cx, y: cy };
-                        setCoordinatesReady(true);
                       } else if (pointTime === endTime) {
                         selectedPointsCoordinates.current.end = { x: cx, y: cy };
-                        setCoordinatesReady(true);
                       }
                     }
                     
@@ -1056,10 +1054,8 @@ export default function ManualSegmentForm({
                       const pointTime = new Date(timestamp).getTime();
                       if (pointTime === startTime) {
                         lastSegmentCoordinates.current.start = { x: cx, y: cy };
-                        setCoordinatesReady(true);
                       } else if (pointTime === endTime) {
                         lastSegmentCoordinates.current.end = { x: cx, y: cy };
-                        setCoordinatesReady(true);
                       }
                     }
                     
