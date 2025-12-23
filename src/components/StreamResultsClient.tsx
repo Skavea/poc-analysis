@@ -134,8 +134,9 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
       oldestSegmentEndTime = new Date(sortedSegments[0].segmentEnd).getTime();
     }
     
-    const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean }> = [];
+    const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean; pointId?: string }> = [];
     let currentY = 0; // Commence à 0
+    let pointCounter = 0; // Compteur pour créer des IDs uniques
     // Le premier segment commence au segmentEnd du segment le plus ancien (ou au début s'il n'y a pas de segment)
     const firstSegmentStartTime = oldestSegmentEndTime ?? (allPointsData.length > 0 ? allPointsData[0].timestamp : new Date(segments[0].segmentEnd).getTime());
     
@@ -243,11 +244,15 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           color: isCorrect >= 0.5 ? '#ef4444' : '#000000', // Rouge si juste, noir si faux
           segmentId: segment.id,
           isExtremity: isStartExtremity,
+          pointId: `${segment.id}-${pointCounter++}`,
         });
         
         // Point d'arrivée de ce sous-segment
         const endTime = currentTime + intervalMs;
-        const endY = subSegmentStartY + result;
+        // Appliquer un poids logarithmique à l'intervalle : result * log(interval + 1)
+        // Cela donne plus de poids aux intervalles supérieurs à 1, mais sans atteindre result * interval
+        const weightedResult = result * Math.log(interval + 1);
+        const endY = subSegmentStartY + weightedResult;
         // C'est une extrémité seulement si c'est le dernier sous-segment
         const isEndExtremity = i === maxLength - 1;
         results.push({
@@ -256,6 +261,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           color: isCorrect >= 0.5 ? '#ef4444' : '#000000',
           segmentId: segment.id,
           isExtremity: isEndExtremity,
+          pointId: `${segment.id}-${pointCounter++}`,
         });
         
         // Mettre à jour pour le prochain sous-segment
@@ -289,8 +295,9 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
   const segmentResultsDataComplete = useMemo(() => {
     if (segments.length === 0) return [];
     
-    const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean }> = [];
+    const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean; pointId?: string }> = [];
     let currentY = 0; // Commence à 0
+    let pointCounter = 0; // Compteur pour créer des IDs uniques
     // Le premier segment commence au début des données
     const firstSegmentStartTime = allPointsData.length > 0 ? allPointsData[0].timestamp : new Date(segments[0].segmentEnd).getTime();
     
@@ -398,11 +405,15 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           color: isCorrect >= 0.5 ? '#ef4444' : '#000000', // Rouge si juste, noir si faux
           segmentId: segment.id,
           isExtremity: isStartExtremity,
+          pointId: `${segment.id}-${pointCounter++}`,
         });
         
         // Point d'arrivée de ce sous-segment
         const endTime = currentTime + intervalMs;
-        const endY = subSegmentStartY + result;
+        // Appliquer un poids logarithmique à l'intervalle : result * log(interval + 1)
+        // Cela donne plus de poids aux intervalles supérieurs à 1, mais sans atteindre result * interval
+        const weightedResult = result * Math.log(interval + 1);
+        const endY = subSegmentStartY + weightedResult;
         // C'est une extrémité seulement si c'est le dernier sous-segment
         const isEndExtremity = i === maxLength - 1;
         results.push({
@@ -411,6 +422,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           color: isCorrect >= 0.5 ? '#ef4444' : '#000000',
           segmentId: segment.id,
           isExtremity: isEndExtremity,
+          pointId: `${segment.id}-${pointCounter++}`,
         });
         
         // Mettre à jour pour le prochain sous-segment
@@ -432,130 +444,6 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     });
     
     // Retourner tous les résultats sans filtre pour le graphique 3
-    return results;
-  }, [segments, allPointsData]);
-
-  // Calculer les données pour le graphique 3 : chaque segment est indépendant et commence au prix du graphique 1 au segmentEnd
-  const segmentResultsDataForChart3 = useMemo(() => {
-    if (segments.length === 0) return [];
-    
-    const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean }> = [];
-    
-    // Trier les segments par segmentEnd pour traiter dans l'ordre
-    const sortedSegments = [...segments].sort((a, b) => {
-      const timeA = new Date(a.segmentEnd).getTime();
-      const timeB = new Date(b.segmentEnd).getTime();
-      return timeA - timeB; // Ordre croissant (le plus ancien en premier)
-    });
-    
-    sortedSegments.forEach((segment) => {
-      
-      // Parser is_result_correct (peut être une chaîne avec plusieurs valeurs)
-      const isCorrectValues = segment.isResultCorrect 
-        ? segment.isResultCorrect.trim().split(/\s+/).map(v => parseFloat(v)).filter(v => !isNaN(v))
-        : [];
-      
-      // Parser result_interval (peut être une chaîne avec plusieurs valeurs)
-      const intervalValues = segment.resultInterval
-        ? segment.resultInterval.trim().split(/\s+/).map(v => parseFloat(v)).filter(v => !isNaN(v))
-        : [];
-      
-      // Parser result (peut être une chaîne avec plusieurs valeurs)
-      const resultValues = segment.result
-        ? segment.result.trim().split(/\s+/).map(v => parseFloat(v)).filter(v => !isNaN(v))
-        : [];
-      
-      // Si pas de valeurs, on passe au segment suivant
-      if (isCorrectValues.length === 0 || intervalValues.length === 0 || resultValues.length === 0) {
-        return;
-      }
-      
-      // S'assurer que toutes les listes ont la même longueur (prendre le max)
-      const maxLength = Math.max(isCorrectValues.length, intervalValues.length, resultValues.length);
-      
-      // Normaliser les listes (répéter la première valeur si nécessaire)
-      const normalizedIntervals: number[] = [];
-      const normalizedResults: number[] = [];
-      const normalizedCorrect: number[] = [];
-      
-      for (let i = 0; i < maxLength; i++) {
-        normalizedIntervals.push(intervalValues[i] ?? intervalValues[0] ?? 0);
-        normalizedResults.push(resultValues[i] ?? resultValues[0] ?? 0);
-        normalizedCorrect.push(isCorrectValues[i] ?? isCorrectValues[0] ?? 0);
-      }
-      
-      // Chaque segment commence indépendamment au segmentEnd de ce segment
-      const segmentEndTime = new Date(segment.segmentEnd).getTime();
-      
-      // Trouver le point de prix du graphique 1 au segmentEnd (chercher le point exact ou le plus proche)
-      let pricePoint = allPointsData.find(p => {
-        // Comparer les timestamps avec une tolérance de 1 seconde pour gérer les arrondis
-        return Math.abs(p.timestamp - segmentEndTime) < 1000;
-      });
-      
-      if (!pricePoint) {
-        // Si pas de point dans la tolérance, trouver le plus proche
-        let minDistance = Infinity;
-        for (const point of allPointsData) {
-          const distance = Math.abs(point.timestamp - segmentEndTime);
-          if (distance < minDistance) {
-            minDistance = distance;
-            pricePoint = point;
-          }
-        }
-      }
-      
-      if (!pricePoint) {
-        // Si toujours pas de point trouvé, passer ce segment
-        return;
-      }
-      
-      // Utiliser le prix exact du point trouvé comme Y d'origine pour ce segment
-      const priceOrigin = pricePoint.price;
-      let currentSegmentY = priceOrigin; // Chaque segment commence exactement au prix du point correspondant
-      
-      // Traiter chaque paire (interval, result, isCorrect) pour créer les sous-segments
-      let currentTime = segmentEndTime;
-      
-      for (let i = 0; i < maxLength; i++) {
-        const interval = normalizedIntervals[i];
-        const result = normalizedResults[i];
-        const isCorrect = normalizedCorrect[i];
-        
-        // Convertir l'intervalle en millisecondes (on suppose que c'est en minutes)
-        const intervalMs = interval * 60 * 1000;
-        
-        // Point de départ de ce sous-segment
-        const subSegmentStartY = currentSegmentY;
-        // C'est une extrémité seulement si c'est le premier sous-segment
-        const isStartExtremity = i === 0;
-        results.push({
-          time: currentTime,
-          value: subSegmentStartY,
-          color: isCorrect >= 0.5 ? '#ef4444' : '#000000', // Rouge si juste, noir si faux
-          segmentId: segment.id,
-          isExtremity: isStartExtremity,
-        });
-        
-        // Point d'arrivée de ce sous-segment
-        const endTime = currentTime + intervalMs;
-        const endY = subSegmentStartY + result;
-        // C'est une extrémité seulement si c'est le dernier sous-segment
-        const isEndExtremity = i === maxLength - 1;
-        results.push({
-          time: endTime,
-          value: endY,
-          color: isCorrect >= 0.5 ? '#ef4444' : '#000000',
-          segmentId: segment.id,
-          isExtremity: isEndExtremity,
-        });
-        
-        // Mettre à jour pour le prochain sous-segment
-        currentTime = endTime;
-        currentSegmentY = endY;
-      }
-    });
-    
     return results;
   }, [segments, allPointsData]);
 
@@ -620,6 +508,93 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     
     return [minPrice - margin, maxPrice + margin];
   }, [chart1Data]);
+
+  // Calculer les données pour le graphique 3 : préserver la forme exacte du graphique 2
+  // mais positionner chaque segment au prix correspondant en préservant les différences relatives
+  const segmentResultsDataForChart3 = useMemo(() => {
+    if (segmentResultsData.length === 0 || chart2YDomain[0] === 'auto' || chart2YDomain[1] === 'auto' || chart1YDomain[0] === 'auto' || chart1YDomain[1] === 'auto') {
+      return segmentResultsData;
+    }
+    
+    // Grouper les points par segmentId
+    const pointsBySegment = new Map<string, Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean; pointId?: string }>>();
+    segmentResultsData.forEach(point => {
+      if (!pointsBySegment.has(point.segmentId)) {
+        pointsBySegment.set(point.segmentId, []);
+      }
+      pointsBySegment.get(point.segmentId)!.push(point);
+    });
+    
+    const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean; pointId?: string }> = [];
+    
+    // Domaines pour la transformation
+    const chart2Min = typeof chart2YDomain[0] === 'number' ? chart2YDomain[0] : 0;
+    const chart2Max = typeof chart2YDomain[1] === 'number' ? chart2YDomain[1] : 1;
+    const chart2Range = chart2Max - chart2Min;
+    
+    const chart1Min = typeof chart1YDomain[0] === 'number' ? chart1YDomain[0] : 0;
+    const chart1Max = typeof chart1YDomain[1] === 'number' ? chart1YDomain[1] : 1;
+    const chart1Range = chart1Max - chart1Min;
+    
+    // Pour chaque segment, trouver le prix au point de départ et calculer la transformation
+    pointsBySegment.forEach((segmentPoints, segmentId) => {
+      if (segmentPoints.length === 0) return;
+      
+      // Trier par temps pour trouver le premier point (point de départ)
+      const sortedPoints = [...segmentPoints].sort((a, b) => a.time - b.time);
+      const firstPoint = sortedPoints[0];
+      const segmentStartTime = firstPoint.time;
+      
+      // Trouver le prix du graphique 1 au point de départ
+      let pricePoint = allPointsData.find(p => {
+        return Math.abs(p.timestamp - segmentStartTime) < 1000;
+      });
+      
+      if (!pricePoint) {
+        let minDistance = Infinity;
+        for (const point of allPointsData) {
+          const distance = Math.abs(point.timestamp - segmentStartTime);
+          if (distance < minDistance) {
+            minDistance = distance;
+            pricePoint = point;
+          }
+        }
+      }
+      
+      if (!pricePoint || chart2Range === 0) {
+        // Si pas de prix trouvé ou domaine invalide, utiliser les valeurs originales
+        segmentPoints.forEach(point => results.push(point));
+        return;
+      }
+      
+      // Calculer l'offset pour positionner le premier point au prix
+      // On normalise d'abord la première valeur dans le domaine du graphique 2, puis on la mappe au domaine du graphique 1
+      const firstValueNormalized = (firstPoint.value - chart2Min) / chart2Range;
+      const targetPriceNormalized = (pricePoint.price - chart1Min) / chart1Range;
+      const offset = (targetPriceNormalized - firstValueNormalized) * chart1Range;
+      
+      // Transformer toutes les valeurs du segment
+      segmentPoints.forEach(point => {
+        // Normaliser la valeur dans le domaine du graphique 2
+        const normalizedValue = (point.value - chart2Min) / chart2Range;
+        // Mapper au domaine du graphique 1 en préservant la position relative
+        const mappedValue = chart1Min + normalizedValue * chart1Range;
+        // Appliquer l'offset pour positionner le segment au prix
+        const finalValue = mappedValue + offset;
+        
+        results.push({
+          time: point.time,
+          value: finalValue,
+          color: point.color,
+          segmentId: point.segmentId,
+          isExtremity: point.isExtremity,
+          pointId: point.pointId,
+        });
+      });
+    });
+    
+    return results;
+  }, [segmentResultsData, allPointsData, chart2YDomain, chart1YDomain]);
 
   // Calculer le domaine X pour le premier graphique (commence à t0)
   const chart1XDomain = useMemo(() => {
@@ -818,19 +793,6 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     return ticks;
   }, [segmentResultsData, chart2YDomain]);
 
-  // Calculer le domaine Y pour les valeurs du graphique 3
-  // Utiliser le même domaine que le graphique 1 (prix) pour que les segments soient alignés visuellement
-  const chart3ValueYDomain = useMemo(() => {
-    // Utiliser le même domaine que les prix pour l'alignement visuel
-    return chart1YDomain;
-  }, [chart1YDomain]);
-
-  // Calculer des ticks réguliers pour l'axe Y droit du graphique 3 (valeurs)
-  // Utiliser les mêmes ticks que l'axe Y gauche (prix) pour l'alignement
-  const calculateChart3ValueYTicks = useMemo(() => {
-    return calculateChart1YTicks;
-  }, [calculateChart1YTicks]);
-
   if (allPointsData.length === 0) {
     return (
       <Card.Root>
@@ -1017,12 +979,15 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                         stroke={group.color}
                         strokeWidth={2}
                         dot={(props: any) => {
-                          const { cx, cy, payload } = props;
-                          if (!cx || !cy || !payload) return <g />;
+                          const { cx, cy, payload, index } = props;
+                          // Utiliser pointId si disponible, sinon créer une clé unique avec groupIndex, segmentId, time et index
+                          const uniqueKey = payload.pointId ?? `${groupIndex}-${payload.segmentId}-${payload.time}-${index ?? 'unknown'}`;
+                          if (!cx || !cy || !payload) return <g key={`empty-${uniqueKey}`} />;
                           // Afficher un point seulement si c'est une extrémité du segment
-                          if (!payload.isExtremity) return <g />;
+                          if (!payload.isExtremity) return <g key={`non-extremity-${uniqueKey}`} />;
                           return (
                             <Dot
+                              key={`dot-${uniqueKey}`}
                               cx={cx}
                               cy={cy}
                               r={1}
@@ -1076,20 +1041,12 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                   allowDataOverflow={false}
                   ticks={calculateXAxisTicks}
                 />
-                {/* Axe Y gauche pour les prix */}
+                {/* Axe Y gauche pour les prix (utilisé aussi pour les segments positionnés) */}
                 <YAxis 
                   yAxisId="left"
                   domain={chart1YDomain}
                   tickFormatter={(value) => `$${value.toFixed(2)}`}
                   ticks={calculateChart1YTicks}
-                />
-                {/* Axe Y droit pour les valeurs des segments */}
-                <YAxis 
-                  yAxisId="right"
-                  orientation="right"
-                  domain={chart3ValueYDomain}
-                  tickFormatter={(value) => value.toFixed(2)}
-                  ticks={calculateChart3ValueYTicks}
                 />
                 <Tooltip
                   labelFormatter={(value) => formatTime(Number(value))}
@@ -1146,18 +1103,21 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                     return (
                       <Line
                         key={`combined-segment-${segmentId}-${segmentIndex}`}
-                        yAxisId="right"
+                        yAxisId="left"
                         type="linear"
                         dataKey="value"
                         stroke={segmentColor}
                         strokeWidth={2}
                         dot={(props: any) => {
-                          const { cx, cy, payload } = props;
-                          if (!cx || !cy || !payload) return <g />;
+                          const { cx, cy, payload, index } = props;
+                          // Utiliser pointId si disponible, sinon créer une clé unique avec segmentId, time et index
+                          const uniqueKey = payload.pointId ?? `${segmentId}-${payload.time}-${index ?? 'unknown'}`;
+                          if (!cx || !cy || !payload) return <g key={`empty-${uniqueKey}`} />;
                           // Afficher un point seulement si c'est une extrémité du segment
-                          if (!payload.isExtremity) return <g />;
+                          if (!payload.isExtremity) return <g key={`non-extremity-${uniqueKey}`} />;
                           return (
                             <Dot
+                              key={`dot-${uniqueKey}`}
                               cx={cx}
                               cy={cy}
                               r={1}
