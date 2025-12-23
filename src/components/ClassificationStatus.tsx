@@ -40,6 +40,14 @@ interface ClassificationStats {
   mlUnclassifiedTotal: number; // Nombre ML non classés (mlResult = 'UNCLASSIFIED')
 }
 
+interface PredictionStats {
+  totalTests: number;
+  testsCorrect: number;
+  testsIncorrect: number;
+  testsUnanswered: number;
+  successRate: number;
+}
+
 async function getClassificationStats(): Promise<ClassificationStats> {
   const allResults = await DatabaseService.getAllAnalysisResults();
   
@@ -123,6 +131,7 @@ async function getClassificationStats(): Promise<ClassificationStats> {
 
 export default async function ClassificationStatus() {
   const stats = await getClassificationStats();
+  const predictionStats = await DatabaseService.getPredictionStats();
   
   // Toujours afficher le composant, même s'il n'y a pas d'éléments non classifiés
 
@@ -144,7 +153,7 @@ export default async function ClassificationStatus() {
       <Card.Body>
         <Grid templateColumns={{ base: "1fr", lg: "3fr 1fr" }} gap={6}>
           {/* Main column - 3/4 */}
-          <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={4}>
+          <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4}>
             {/* First card - General status */}
             <Card.Root>
               <Card.Header>
@@ -240,6 +249,56 @@ export default async function ClassificationStatus() {
                     <Text fontSize="sm" color="fg.muted">ML incorrect:</Text>
                     <Text fontSize="lg" fontWeight="bold" color="red.600">
                       {stats.mlClassifiedIncorrect}
+                    </Text>
+                  </HStack>
+                </VStack>
+              </Card.Body>
+            </Card.Root>
+
+            {/* Third card - Prediction result */}
+            <Card.Root>
+              <Card.Header>
+                <Heading size="sm" color="fg.default">Prediction result</Heading>
+              </Card.Header>
+              <Card.Body>
+                <VStack gap={3} align="stretch">
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">Nombre de test:</Text>
+                    <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                      {predictionStats.totalTests}
+                    </Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">Nombre de tests juste:</Text>
+                    <HStack gap={1}>
+                      <CheckCircle size={16} color="var(--chakra-colors-green-500)" />
+                      <Text fontSize="lg" fontWeight="bold" color="green.600">
+                        {predictionStats.testsCorrect}
+                      </Text>
+                    </HStack>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">Nombre de tests faux:</Text>
+                    <HStack gap={1}>
+                      <AlertCircle size={16} color="var(--chakra-colors-red-500)" />
+                      <Text fontSize="lg" fontWeight="bold" color="red.600">
+                        {predictionStats.testsIncorrect}
+                      </Text>
+                    </HStack>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">Nombre de tests non répondu:</Text>
+                    <HStack gap={1}>
+                      <AlertCircle size={16} color="var(--chakra-colors-orange-500)" />
+                      <Text fontSize="lg" fontWeight="bold" color="orange.600">
+                        {predictionStats.testsUnanswered}
+                      </Text>
+                    </HStack>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="fg.muted">Pourcentage de réussite:</Text>
+                    <Text fontSize="lg" fontWeight="bold" color={predictionStats.successRate >= 50 ? "green.600" : "red.600"}>
+                      {predictionStats.successRate.toFixed(2)}%
                     </Text>
                   </HStack>
                 </VStack>

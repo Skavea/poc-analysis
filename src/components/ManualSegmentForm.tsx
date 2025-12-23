@@ -578,12 +578,13 @@ export default function ManualSegmentForm({
   const handleEnd = async () => {
     if (!previousSegment || !isResultCorrect.trim()) return;
     
-    if (!confirm('Êtes-vous sûr de vouloir terminer ? Le feedback du segment précédent sera enregistré.')) {
+    if (!confirm('Êtes-vous sûr de vouloir terminer ? Le feedback du segment précédent sera enregistré et le marché sera marqué comme terminé.')) {
       return;
     }
     
     setIsSaving(true);
     try {
+      // Enregistrer le feedback du segment précédent
       const response = await fetch('/api/update-segment-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -598,13 +599,29 @@ export default function ManualSegmentForm({
       const result = await response.json();
       
       if (response.ok && result.success) {
-        alert('Feedback enregistré avec succès !');
-        window.location.href = '/';
+        // Marquer le stream comme terminé
+        const terminateResponse = await fetch('/api/terminate-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            streamId: stockDataId,
+          }),
+        });
+
+        const terminateResult = await terminateResponse.json();
+        
+        if (terminateResponse.ok && terminateResult.success) {
+          alert('Feedback enregistré avec succès et marché terminé !');
+          window.location.href = '/';
+        } else {
+          alert('Feedback enregistré mais erreur lors de la finalisation du marché : ' + (terminateResult.error || 'Erreur inconnue'));
+          window.location.href = '/';
+        }
       } else {
         alert(result.error || 'Erreur lors de l\'enregistrement du feedback');
       }
     } catch (error) {
-      console.error('Error saving feedback:', error);
+      console.error('Error saving feedback or terminating stream:', error);
       alert('Erreur lors de la sauvegarde');
     } finally {
       setIsSaving(false);

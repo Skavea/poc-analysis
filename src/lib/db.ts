@@ -1152,6 +1152,93 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * Récupère les statistiques de prédiction pour les segments avec generation_mode == 'manual'
+   */
+  static async getPredictionStats(): Promise<{
+    totalTests: number;
+    testsCorrect: number;
+    testsIncorrect: number;
+    testsUnanswered: number;
+    successRate: number;
+  }> {
+    try {
+      // Requête avec jointure pour filtrer sur generation_mode == 'manual'
+      const results = await this.db
+        .select({
+          id: schema.analysisResults.id,
+          isResultCorrect: schema.analysisResults.isResultCorrect,
+        })
+        .from(schema.analysisResults)
+        .innerJoin(
+          schema.stockData,
+          eq(schema.analysisResults.stockDataId, schema.stockData.id)
+        )
+        .where(eq(schema.stockData.generationMode, 'manual'));
+
+      // Compter les différents types de tests
+      let totalTests = results.length;
+      let testsCorrect = 0;
+      let testsIncorrect = 0;
+      let testsUnanswered = 0;
+
+      for (const result of results) {
+        const isResultCorrect = result.isResultCorrect;
+        
+        if (isResultCorrect === null) {
+          // Nombre de tests non répondu : is_result_correct == null
+          testsUnanswered++;
+        } else {
+          // is_result_correct est un text qui peut contenir des valeurs numériques séparées par des espaces
+          // Nombre de tests juste : is_result_correct != null et != 0 (donc > 0, dans l'intervalle ]0,1])
+          // Nombre de tests faux : is_result_correct != null et == 0
+          const trimmed = isResultCorrect.trim();
+          
+          // Vérifier si toutes les valeurs sont "0"
+          const values = trimmed.split(/\s+/).filter(v => v.trim() !== '');
+          const allZero = values.length > 0 && values.every(v => {
+            const num = parseFloat(v);
+            return !isNaN(num) && num === 0;
+          });
+          
+          // Vérifier s'il y a au moins une valeur > 0
+          const hasPositiveValue = values.some(v => {
+            const num = parseFloat(v);
+            return !isNaN(num) && num > 0;
+          });
+          
+          if (allZero) {
+            // Toutes les valeurs sont 0 -> test faux
+            testsIncorrect++;
+          } else if (hasPositiveValue) {
+            // Au moins une valeur > 0 -> test juste
+            testsCorrect++;
+          } else {
+            // Chaîne non vide mais valeurs invalides -> considéré comme non répondu
+            testsUnanswered++;
+          }
+        }
+      }
+
+      // Calculer le pourcentage de réussite
+      const totalAnswered = testsCorrect + testsIncorrect;
+      const successRate = totalAnswered > 0 
+        ? Math.round((testsCorrect / totalAnswered) * 100 * 100) / 100 // Arrondir à 2 décimales
+        : 0;
+
+      return {
+        totalTests,
+        testsCorrect,
+        testsIncorrect,
+        testsUnanswered,
+        successRate,
+      };
+    } catch (error) {
+      console.error('Error fetching prediction stats:', error);
+      throw new Error('Failed to fetch prediction stats');
+    }
+  }
+
   // Health check
   static async healthCheck(): Promise<boolean> {
     try {

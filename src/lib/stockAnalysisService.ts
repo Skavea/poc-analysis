@@ -480,6 +480,77 @@ export class StockAnalysisService {
     const finalStartTimestamp = userStartTime <= userEndTime ? startTimestamp : endTimestamp;
     const finalEndTimestamp = userStartTime <= userEndTime ? endTimestamp : startTimestamp;
 
+    // Filtrer pointsData, redPoints et greenPoints pour ne garder que les points jusqu'à finalEndTimestamp inclus
+    // Cela évite d'avoir un point supplémentaire ajouté par adjustSegmentSize
+    const finalEndTime = new Date(finalEndTimestamp).getTime();
+    
+    // Filtrer pointsData
+    segment.pointsData = segment.pointsData.filter(point => {
+      const pointTime = new Date(point.timestamp).getTime();
+      return pointTime <= finalEndTime;
+    });
+
+    // Filtrer redPointsData
+    segment.redPointsData = segment.redPointsData.filter(point => {
+      const pointTime = new Date(point.timestamp).getTime();
+      return pointTime <= finalEndTime;
+    });
+
+    // Filtrer greenPointsData
+    segment.greenPointsData = segment.greenPointsData.filter(point => {
+      const pointTime = new Date(point.timestamp).getTime();
+      return pointTime <= finalEndTime;
+    });
+
+    // Recalculer pointCount et les compteurs basés sur les points filtrés
+    if (segment.pointsData.length > 0) {
+      segment.pointCount = segment.pointsData.length;
+      segment.redPointCount = segment.redPointsData.length;
+      segment.greenPointCount = segment.greenPointsData.length;
+      
+      // Recalculer les métriques basées sur les points filtrés
+      const filteredPrices = segment.pointsData.map(p => p.close);
+      segment.x0 = filteredPrices[filteredPrices.length - 1];
+      segment.minPrice = Math.min(...filteredPrices);
+      segment.maxPrice = Math.max(...filteredPrices);
+      segment.averagePrice = (segment.minPrice + segment.maxPrice) / 2;
+      segment.trendDirection = segment.x0 > segment.averagePrice ? 'UP' : 'DOWN';
+      
+      // Recalculer pointsInRegion
+      segment.pointsInRegion = segment.pointsData.filter(point => {
+        if (segment.trendDirection === 'UP') {
+          return point.close > segment.averagePrice;
+        } else {
+          return point.close < segment.averagePrice;
+        }
+      }).length;
+      
+      // Recalculer blackPointsCount et u
+      segment.blackPointsCount = this.calculateBlackPointsCount(filteredPrices);
+      const uRaw = segment.blackPointsCount > 0 ? (segment.maxPrice - segment.minPrice) / segment.blackPointsCount : 0;
+      segment.u = Math.floor(uRaw * 100) / 100;
+      
+      // Recalculer redPointsFormatted et greenPointsFormatted
+      const normalizeZeroValue = (value: number): number => {
+        if (Math.abs(value) < 1e-9) {
+          return segment.trendDirection === 'UP' ? 0.000001 : -0.000001;
+        }
+        return value;
+      };
+      
+      segment.redPointsFormatted = segment.redPointsData
+        .map(point => point.close - segment.averagePrice)
+        .map(normalizeZeroValue)
+        .map(value => value.toFixed(6))
+        .join(' ');
+      
+      segment.greenPointsFormatted = segment.greenPointsData
+        .map(point => point.close - segment.averagePrice)
+        .map(normalizeZeroValue)
+        .map(value => value.toFixed(6))
+        .join(' ');
+    }
+
     // Forcer les timestamps de début et de fin à correspondre à la sélection de l'utilisateur
     segment.segmentStart = finalStartTimestamp;
     segment.segmentEnd = finalEndTimestamp;
