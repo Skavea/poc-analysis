@@ -17,6 +17,7 @@ import AnalysisStatusScript from '@/components/AnalysisStatusScript';
 import ClientAnalysisStatus from '@/components/ClientAnalysisStatus';
 import AdvancedAnalysisFilter from '@/components/AdvancedAnalysisFilter';
 import DeleteSegmentButton from '@/components/DeleteSegmentButton';
+import ResultStats from '@/components/ResultStats';
 import {
   Box,
   VStack,
@@ -68,10 +69,12 @@ async function AnalysisStatsServer({
   // Vérifier si le stream est terminé et trouver le dernier segment créé
   let isStreamTerminated = true;
   let lastSegmentId: string | null = null;
+  let isStreamManual = false;
   
   if (searchParams.stream) {
     const stream = await DatabaseService.getStockDataById(searchParams.stream);
     isStreamTerminated = stream?.terminated ?? true;
+    isStreamManual = stream?.generationMode === 'manual';
     
     // Trouver le dernier segment créé (created_at le plus récent) pour ce stream
     if (results.length > 0 && !isStreamTerminated) {
@@ -169,7 +172,17 @@ async function AnalysisStatsServer({
       {/* Hidden script to update client components */}
       <AnalysisStatusScript hasExistingAnalysis={hasExistingAnalysis} />
       
-
+      {/* Afficher les stats de résultats si un stream manuel est sélectionné */}
+      {searchParams.stream && isStreamManual && (
+        <Card.Root>
+          <Card.Header>
+            <Heading size="md" color="fg.default">Statistiques de résultats</Heading>
+          </Card.Header>
+          <Card.Body>
+            <ResultStats stockDataId={searchParams.stream} />
+          </Card.Body>
+        </Card.Root>
+      )}
 
       {/* Analysis Results et Filtres côte à côte */}
       <Card.Root>

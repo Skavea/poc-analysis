@@ -23,6 +23,7 @@ import {
 import { BarChart3, Calendar, Database, ArrowLeft, Play, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
+import ResultStats from '@/components/ResultStats';
 
 // Types
 interface StreamsPageProps {
@@ -42,8 +43,23 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
     const streamIds = streamsWithDateRanges.map(stream => stream.id);
     const segmentCountsByStream = await DatabaseService.getSegmentCountsForStreams(streamIds);
 
+    // Vérifier si le marché a des streams en mode manuel
+    const hasManualStreams = streamsWithDateRanges.some(stream => stream.generationMode === 'manual');
+
     return (
       <VStack gap={6} align="stretch">
+        {/* Afficher les stats de résultats si le marché a des streams en mode manuel */}
+        {hasManualStreams && (
+          <Card.Root>
+            <Card.Header>
+              <Heading size="md" color="fg.default">Statistiques de résultats</Heading>
+            </Card.Header>
+            <Card.Body>
+              <ResultStats symbol={symbol} />
+            </Card.Body>
+          </Card.Root>
+        )}
+
         {streamsWithDateRanges.length === 0 ? (
           <Card.Root>
             <Card.Body textAlign="center" py={12}>

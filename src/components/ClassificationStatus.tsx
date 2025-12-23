@@ -48,6 +48,13 @@ interface PredictionStats {
   successRate: number;
 }
 
+interface ResultStats {
+  totalResults: number;
+  resultsCorrect: number;
+  resultsIncorrect: number;
+  successRate: number;
+}
+
 async function getClassificationStats(): Promise<ClassificationStats> {
   const allResults = await DatabaseService.getAllAnalysisResults();
   
@@ -132,6 +139,8 @@ async function getClassificationStats(): Promise<ClassificationStats> {
 export default async function ClassificationStatus() {
   const stats = await getClassificationStats();
   const predictionStats = await DatabaseService.getPredictionStats();
+  const resultStats09 = await DatabaseService.getResultStats(0.9);
+  const resultStats06 = await DatabaseService.getResultStats(0.6);
   
   // Toujours afficher le composant, même s'il n'y a pas d'éléments non classifiés
 
@@ -153,7 +162,9 @@ export default async function ClassificationStatus() {
       <Card.Body>
         <Grid templateColumns={{ base: "1fr", lg: "3fr 1fr" }} gap={6}>
           {/* Main column - 3/4 */}
-          <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4}>
+          <VStack gap={4} align="stretch">
+            {/* First row - 2 columns */}
+            <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={4}>
             {/* First card - General status */}
             <Card.Root>
               <Card.Header>
@@ -255,56 +266,143 @@ export default async function ClassificationStatus() {
               </Card.Body>
             </Card.Root>
 
-            {/* Third card - Prediction result */}
-            <Card.Root>
-              <Card.Header>
-                <Heading size="sm" color="fg.default">Prediction result</Heading>
-              </Card.Header>
-              <Card.Body>
-                <VStack gap={3} align="stretch">
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color="fg.muted">Nombre de test:</Text>
-                    <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                      {predictionStats.totalTests}
-                    </Text>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color="fg.muted">Nombre de tests juste:</Text>
-                    <HStack gap={1}>
-                      <CheckCircle size={16} color="var(--chakra-colors-green-500)" />
-                      <Text fontSize="lg" fontWeight="bold" color="green.600">
-                        {predictionStats.testsCorrect}
+            </Grid>
+
+            {/* Second row - 3 columns */}
+            <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4}>
+              {/* Third card - Prediction result */}
+              <Card.Root>
+                <Card.Header>
+                  <Heading size="sm" color="fg.default">Prediction result</Heading>
+                </Card.Header>
+                <Card.Body>
+                  <VStack gap={3} align="stretch">
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de test:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                        {predictionStats.totalTests}
                       </Text>
                     </HStack>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color="fg.muted">Nombre de tests faux:</Text>
-                    <HStack gap={1}>
-                      <AlertCircle size={16} color="var(--chakra-colors-red-500)" />
-                      <Text fontSize="lg" fontWeight="bold" color="red.600">
-                        {predictionStats.testsIncorrect}
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de tests juste:</Text>
+                      <HStack gap={1}>
+                        <CheckCircle size={16} color="var(--chakra-colors-green-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="green.600">
+                          {predictionStats.testsCorrect}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de tests faux:</Text>
+                      <HStack gap={1}>
+                        <AlertCircle size={16} color="var(--chakra-colors-red-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="red.600">
+                          {predictionStats.testsIncorrect}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de tests non répondu:</Text>
+                      <HStack gap={1}>
+                        <AlertCircle size={16} color="var(--chakra-colors-orange-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="orange.600">
+                          {predictionStats.testsUnanswered}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Pourcentage de réussite:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color={predictionStats.successRate >= 50 ? "green.600" : "red.600"}>
+                        {predictionStats.successRate.toFixed(2)}%
                       </Text>
                     </HStack>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color="fg.muted">Nombre de tests non répondu:</Text>
-                    <HStack gap={1}>
-                      <AlertCircle size={16} color="var(--chakra-colors-orange-500)" />
-                      <Text fontSize="lg" fontWeight="bold" color="orange.600">
-                        {predictionStats.testsUnanswered}
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
+
+              {/* Fourth card - Result stats >= 0.9 */}
+              <Card.Root>
+                <Card.Header>
+                  <Heading size="sm" color="fg.default">Résultats {'>='} 0.9</Heading>
+                </Card.Header>
+                <Card.Body>
+                  <VStack gap={3} align="stretch">
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de résultat total:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                        {resultStats09.totalResults}
                       </Text>
                     </HStack>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color="fg.muted">Pourcentage de réussite:</Text>
-                    <Text fontSize="lg" fontWeight="bold" color={predictionStats.successRate >= 50 ? "green.600" : "red.600"}>
-                      {predictionStats.successRate.toFixed(2)}%
-                    </Text>
-                  </HStack>
-                </VStack>
-              </Card.Body>
-            </Card.Root>
-          </Grid>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de résultat juste:</Text>
+                      <HStack gap={1}>
+                        <CheckCircle size={16} color="var(--chakra-colors-green-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="green.600">
+                          {resultStats09.resultsCorrect}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de résultat faux:</Text>
+                      <HStack gap={1}>
+                        <AlertCircle size={16} color="var(--chakra-colors-red-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="red.600">
+                          {resultStats09.resultsIncorrect}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Pourcentage de réussite:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color={resultStats09.successRate >= 50 ? "green.600" : "red.600"}>
+                        {resultStats09.successRate.toFixed(2)}%
+                      </Text>
+                    </HStack>
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
+
+              {/* Fifth card - Result stats >= 0.6 */}
+              <Card.Root>
+                <Card.Header>
+                  <Heading size="sm" color="fg.default">Résultats {'>='} 0.6</Heading>
+                </Card.Header>
+                <Card.Body>
+                  <VStack gap={3} align="stretch">
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de résultat total:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                        {resultStats06.totalResults}
+                      </Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de résultat juste:</Text>
+                      <HStack gap={1}>
+                        <CheckCircle size={16} color="var(--chakra-colors-green-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="green.600">
+                          {resultStats06.resultsCorrect}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Nombre de résultat faux:</Text>
+                      <HStack gap={1}>
+                        <AlertCircle size={16} color="var(--chakra-colors-red-500)" />
+                        <Text fontSize="lg" fontWeight="bold" color="red.600">
+                          {resultStats06.resultsIncorrect}
+                        </Text>
+                      </HStack>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="sm" color="fg.muted">Pourcentage de réussite:</Text>
+                      <Text fontSize="lg" fontWeight="bold" color={resultStats06.successRate >= 50 ? "green.600" : "red.600"}>
+                        {resultStats06.successRate.toFixed(2)}%
+                      </Text>
+                    </HStack>
+                  </VStack>
+                </Card.Body>
+              </Card.Root>
+            </Grid>
+          </VStack>
 
           {/* Right column - 1/4 - Action button */}
           <Card.Root>

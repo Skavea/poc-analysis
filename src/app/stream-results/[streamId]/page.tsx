@@ -9,6 +9,7 @@
 import { DatabaseService } from '@/lib/db';
 import Navigation from '@/components/layout/Navigation';
 import StreamResultsClient from '@/components/StreamResultsClient';
+import ResultStats from '@/components/ResultStats';
 import { 
   Card,
   Heading, 
@@ -77,10 +78,22 @@ async function StreamResultsServer({ streamId }: { streamId: string }) {
     });
 
     return (
-      <StreamResultsClient 
-        stockData={stockData} 
-        segments={sortedSegments}
-      />
+      <VStack gap={6} align="stretch">
+        {/* Afficher les stats de résultats pour ce stream (déjà vérifié qu'il est en mode manuel) */}
+        <Card.Root>
+          <Card.Header>
+            <Heading size="md" color="fg.default">Statistiques de résultats</Heading>
+          </Card.Header>
+          <Card.Body>
+            <ResultStats stockDataId={streamId} />
+          </Card.Body>
+        </Card.Root>
+
+        <StreamResultsClient 
+          stockData={stockData} 
+          segments={sortedSegments}
+        />
+      </VStack>
     );
   } catch (error) {
     console.error('Error fetching stream results:', error);

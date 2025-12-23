@@ -1153,9 +1153,126 @@ export class DatabaseService {
   }
 
   /**
-   * Récupère les statistiques de prédiction pour les segments avec generation_mode == 'manual'
+   * Récupère les statistiques de résultats basées sur la colonne result pour un seuil donné
+   * @param threshold Seuil minimum (ex: 0.9 ou 0.6)
+   * @param symbol Optionnel : filtrer par symbole
+   * @param stockDataId Optionnel : filtrer par stock_data_id
    */
-  static async getPredictionStats(): Promise<{
+  static async getResultStats(threshold: number, symbol?: string, stockDataId?: string): Promise<{
+    totalResults: number;
+    resultsCorrect: number;
+    resultsIncorrect: number;
+    successRate: number;
+  }> {
+    try {
+      // Construire les conditions de filtrage
+      const conditions = [
+        eq(schema.stockData.generationMode, 'manual'),
+        isNotNull(schema.analysisResults.isResultCorrect)
+      ];
+
+      if (symbol) {
+        conditions.push(eq(schema.analysisResults.symbol, symbol.toUpperCase()));
+      }
+
+      if (stockDataId) {
+        conditions.push(eq(schema.analysisResults.stockDataId, stockDataId));
+      }
+
+      // Requête avec jointure pour filtrer sur generation_mode == 'manual' et is_result_correct != null
+      const results = await this.db
+        .select({
+          id: schema.analysisResults.id,
+          result: schema.analysisResults.result,
+          isResultCorrect: schema.analysisResults.isResultCorrect,
+        })
+        .from(schema.analysisResults)
+        .innerJoin(
+          schema.stockData,
+          eq(schema.analysisResults.stockDataId, schema.stockData.id)
+        )
+        .where(and(...conditions));
+
+      // Compter les différents types de résultats
+      let totalResults = 0;
+      let resultsCorrect = 0;
+      let resultsIncorrect = 0;
+
+      for (const result of results) {
+        const resultValue = result.result;
+        const isResultCorrect = result.isResultCorrect;
+        
+        if (resultValue === null || resultValue.trim() === '') {
+          continue; // Ignorer les segments sans résultat
+        }
+
+        // result peut contenir plusieurs nombres séparés par des espaces
+        // Si un des nombres valide la règle (>= threshold ou <= -threshold), le segment est considéré comme la validant
+        const values = resultValue.trim().split(/\s+/).filter(v => v.trim() !== '');
+        let hasValidResult = false;
+
+        for (const value of values) {
+          const num = parseFloat(value);
+          if (!isNaN(num) && (num >= threshold || num <= -threshold)) {
+            hasValidResult = true;
+            break; // Il suffit qu'un seul nombre valide la règle
+          }
+        }
+
+        if (hasValidResult) {
+          totalResults++;
+          
+          // Vérifier si is_result_correct indique un résultat juste ou faux
+          if (isResultCorrect === null) {
+            continue; // Ignorer si is_result_correct est null
+          }
+
+          const trimmed = isResultCorrect.trim();
+          const valuesCorrect = trimmed.split(/\s+/).filter(v => v.trim() !== '');
+          const allZero = valuesCorrect.length > 0 && valuesCorrect.every(v => {
+            const num = parseFloat(v);
+            return !isNaN(num) && num === 0;
+          });
+          
+          const hasPositiveValue = valuesCorrect.some(v => {
+            const num = parseFloat(v);
+            return !isNaN(num) && num > 0;
+          });
+
+          if (hasPositiveValue) {
+            // is_result_correct != 0 et != null -> résultat juste
+            resultsCorrect++;
+          } else if (allZero) {
+            // is_result_correct == 0 et != null -> résultat faux
+            resultsIncorrect++;
+          }
+        }
+      }
+
+      // Calculer le pourcentage de réussite
+      const totalAnswered = resultsCorrect + resultsIncorrect;
+      const successRate = totalAnswered > 0 
+        ? Math.round((resultsCorrect / totalAnswered) * 100 * 100) / 100 // Arrondir à 2 décimales
+        : 0;
+
+      return {
+        totalResults,
+        resultsCorrect,
+        resultsIncorrect,
+        successRate,
+      };
+    } catch (error) {
+      console.error('Error fetching result stats:', error);
+      throw new Error('Failed to fetch result stats');
+    }
+  }
+
+  /**
+   * Récupère les statistiques de prédiction pour les segments avec generation_mode == 'manual'
+   * @param symbol Optionnel : filtrer par symbole
+   * @param stockDataId Optionnel : filtrer par stock_data_id
+   */
+  static async getPredictionStats(symbol?: string, stockDataId?: string): Promise<{
     totalTests: number;
     testsCorrect: number;
     testsIncorrect: number;
@@ -1163,6 +1280,17 @@ export class DatabaseService {
     successRate: number;
   }> {
     try {
+      // Construire les conditions de filtrage
+      const conditions = [eq(schema.stockData.generationMode, 'manual')];
+
+      if (symbol) {
+        conditions.push(eq(schema.analysisResults.symbol, symbol.toUpperCase()));
+      }
+
+      if (stockDataId) {
+        conditions.push(eq(schema.analysisResults.stockDataId, stockDataId));
+      }
+
       // Requête avec jointure pour filtrer sur generation_mode == 'manual'
       const results = await this.db
         .select({
@@ -1174,7 +1302,7 @@ export class DatabaseService {
           schema.stockData,
           eq(schema.analysisResults.stockDataId, schema.stockData.id)
         )
-        .where(eq(schema.stockData.generationMode, 'manual'));
+        .where(and(...conditions));
 
       // Compter les différents types de tests
       let totalTests = results.length;
