@@ -596,6 +596,129 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     return results;
   }, [segmentResultsData, allPointsData, chart2YDomain, chart1YDomain]);
 
+  // Calculer les segments de courbe lissée pour le graphique 4
+  // Chaque série continue de segments rouges forme une courbe qui :
+  // - Démarre du point de départ du premier segment rouge
+  // - Passe par les points moyens entre chaque paire de segments rouges
+  // - Se termine au point de fin du dernier segment rouge
+  const chart4AverageDataSegments = useMemo(() => {
+    if (segmentResultsDataForChart3.length === 0) return [];
+    
+    // Grouper les points par segmentId
+    const pointsBySegment = new Map<string, Array<{ time: number; value: number; color: string; isExtremity?: boolean }>>();
+    segmentResultsDataForChart3.forEach(point => {
+      if (!pointsBySegment.has(point.segmentId)) {
+        pointsBySegment.set(point.segmentId, []);
+      }
+      pointsBySegment.get(point.segmentId)!.push(point);
+    });
+    
+    // Trier les segments par temps de début (premier point de chaque segment)
+    const sortedSegments = Array.from(pointsBySegment.entries())
+      .map(([segmentId, points]) => {
+        const sortedPoints = [...points].sort((a, b) => a.time - b.time);
+        return {
+          segmentId,
+          points: sortedPoints,
+          startTime: sortedPoints[0]?.time ?? 0,
+          isRed: sortedPoints[0]?.color === '#ef4444',
+        };
+      })
+      .sort((a, b) => a.startTime - b.startTime);
+    
+    // Identifier les séries continues de segments rouges
+    const redSeries: Array<Array<typeof sortedSegments[0]>> = [];
+    let currentSeries: Array<typeof sortedSegments[0]> = [];
+    
+    sortedSegments.forEach((segment) => {
+      if (segment.isRed) {
+        // Si c'est un segment rouge, l'ajouter à la série actuelle
+        currentSeries.push(segment);
+      } else {
+        // Si c'est un segment noir, terminer la série actuelle et en commencer une nouvelle
+        if (currentSeries.length > 0) {
+          redSeries.push(currentSeries);
+          currentSeries = [];
+        }
+      }
+    });
+    
+    // Ajouter la dernière série si elle existe
+    if (currentSeries.length > 0) {
+      redSeries.push(currentSeries);
+    }
+    
+    // Pour chaque série continue de segments rouges, créer une courbe
+    // La courbe doit passer par des points fictifs (non affichés) :
+    // - Au niveau de chaque départ et fin de segment rouge
+    // - Quand il y a un départ et une fin au même timestamp, utiliser la moyenne
+    const curveSegments: Array<Array<{ time: number; average: number }>> = [];
+    
+    redSeries.forEach((series) => {
+      if (series.length === 0) return;
+      
+      // Collecter tous les points de départ et de fin des segments rouges
+      // Grouper par timestamp pour gérer les cas où départ et fin sont au même timestamp
+      const pointsByTime = new Map<number, Array<{ value: number; isStart: boolean; isEnd: boolean }>>();
+      
+      series.forEach((segment) => {
+        const sortedPoints = segment.points.sort((a, b) => a.time - b.time);
+        
+        // Point de départ (premier point)
+        if (sortedPoints.length > 0) {
+          const startPoint = sortedPoints[0];
+          if (!pointsByTime.has(startPoint.time)) {
+            pointsByTime.set(startPoint.time, []);
+          }
+          pointsByTime.get(startPoint.time)!.push({
+            value: startPoint.value,
+            isStart: true,
+            isEnd: false,
+          });
+        }
+        
+        // Point de fin (dernier point)
+        if (sortedPoints.length > 0) {
+          const endPoint = sortedPoints[sortedPoints.length - 1];
+          if (!pointsByTime.has(endPoint.time)) {
+            pointsByTime.set(endPoint.time, []);
+          }
+          pointsByTime.get(endPoint.time)!.push({
+            value: endPoint.value,
+            isStart: false,
+            isEnd: true,
+          });
+        }
+      });
+      
+      // Créer les points fictifs pour la courbe
+      // Si un timestamp a plusieurs points (départ et fin), calculer la moyenne
+      const curvePoints: Array<{ time: number; average: number }> = [];
+      const sortedTimes = Array.from(pointsByTime.keys()).sort((a, b) => a - b);
+      
+      sortedTimes.forEach((time) => {
+        const points = pointsByTime.get(time)!;
+        if (points.length === 1) {
+          // Un seul point : utiliser sa valeur
+          curvePoints.push({ time, average: points[0].value });
+        } else {
+          // Plusieurs points au même timestamp : calculer la moyenne
+          const average = points.reduce((sum, p) => sum + p.value, 0) / points.length;
+          curvePoints.push({ time, average });
+        }
+      });
+      
+      // Trier par temps pour s'assurer que l'ordre est correct
+      curvePoints.sort((a, b) => a.time - b.time);
+      
+      if (curvePoints.length > 0) {
+        curveSegments.push(curvePoints);
+      }
+    });
+    
+    return curveSegments;
+  }, [segmentResultsDataForChart3]);
+
   // Calculer le domaine X pour le premier graphique (commence à t0)
   const chart1XDomain = useMemo(() => {
     if (allPointsData.length === 0) return ['dataMin', 'dataMax'];
@@ -698,6 +821,32 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     const link = document.createElement('a');
     link.href = url;
     link.download = `stream-combined-${stockData.id}-${new Date().toISOString()}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Fonction pour télécharger le quatrième graphique
+  const handleDownloadChart4 = () => {
+    const svgElement = document.querySelector('#chart4 .recharts-wrapper svg') as SVGElement;
+    if (!svgElement) {
+      alert('Graphique non trouvé');
+      return;
+    }
+    
+    const svgClone = svgElement.cloneNode(true) as SVGElement;
+    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svgClone.setAttribute('width', svgElement.clientWidth.toString());
+    svgClone.setAttribute('height', svgElement.clientHeight.toString());
+    
+    const svgString = new XMLSerializer().serializeToString(svgClone);
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `stream-smoothed-${stockData.id}-${new Date().toISOString()}.svg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1135,6 +1284,101 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                     );
                   });
                 })()}
+              </LineChart>
+            </ResponsiveContainer>
+          </Box>
+        </Card.Body>
+      </Card.Root>
+
+      {/* Quatrième graphique : Graphique avec courbe lissée */}
+      <Card.Root>
+        <Card.Header>
+          <HStack justify="space-between" align="center" w="100%">
+            <Heading size="md" color="fg.default">
+              Graphique avec courbe lissée
+            </Heading>
+            <Button
+              size="sm"
+              colorPalette="blue"
+              variant="outline"
+              onClick={handleDownloadChart4}
+            >
+              <Download size={16} style={{ marginRight: '8px' }} />
+              Télécharger
+            </Button>
+          </HStack>
+        </Card.Header>
+        <Card.Body>
+          <Box id="chart4" width="100%" height={400}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart>
+                <XAxis
+                  dataKey="time"
+                  type="number"
+                  scale="time"
+                  domain={chart3XDomain}
+                  tickFormatter={formatTime}
+                  allowDataOverflow={false}
+                  ticks={calculateXAxisTicks}
+                />
+                {/* Axe Y gauche pour les prix */}
+                <YAxis 
+                  yAxisId="left"
+                  domain={chart1YDomain}
+                  tickFormatter={(value) => `$${value.toFixed(2)}`}
+                  ticks={calculateChart1YTicks}
+                />
+                <Tooltip
+                  labelFormatter={(value) => formatTime(Number(value))}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'price') {
+                      return [value.toFixed(2), 'Prix'];
+                    } else if (name === 'average') {
+                      return [value.toFixed(2), 'Moyenne'];
+                    } else {
+                      return [value.toFixed(2), 'Valeur'];
+                    }
+                  }}
+                />
+                {/* Ligne des prix - filtrer pour commencer à t0 */}
+                {(() => {
+                  const allPriceData = allPointsData
+                    .filter(p => p.timestamp >= t0Time)
+                    .map(p => ({ time: p.timestamp, price: p.price }));
+                  
+                  return allPriceData.length > 0 ? (
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="price"
+                      data={allPriceData}
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                      name="price"
+                      connectNulls={false}
+                    />
+                  ) : null;
+                })()}
+                {/* Courbe lissée passant par les points moyens (sans points verts, seulement sur segments rouges, discontinue) */}
+                {chart4AverageDataSegments.map((segment, segmentIndex) => (
+                  segment.length > 0 && (
+                    <Line
+                      key={`average-segment-${segmentIndex}`}
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="average"
+                      data={segment}
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      dot={false}
+                      isAnimationActive={false}
+                      name="average"
+                      connectNulls={false}
+                    />
+                  )
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </Box>
