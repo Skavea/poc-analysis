@@ -77,6 +77,12 @@ async function StreamResultsServer({ streamId }: { streamId: string }) {
       return dateA - dateB;
     });
 
+    // Récupérer les stats pour les passer au composant client
+    const [predictionStats, resultStats06] = await Promise.all([
+      DatabaseService.getPredictionStats(undefined, streamId),
+      DatabaseService.getResultStats(0.6, undefined, streamId),
+    ]);
+
     return (
       <VStack gap={6} align="stretch">
         {/* Afficher les stats de résultats pour ce stream (déjà vérifié qu'il est en mode manuel) */}
@@ -92,6 +98,8 @@ async function StreamResultsServer({ streamId }: { streamId: string }) {
         <StreamResultsClient 
           stockData={stockData} 
           segments={sortedSegments}
+          predictionStats={predictionStats}
+          resultStats06={resultStats06}
         />
       </VStack>
     );
@@ -119,10 +127,20 @@ export default async function StreamResultsPage({ params }: StreamResultsPagePro
   const resolvedParams = await params;
   const streamId = resolvedParams.streamId;
 
+  // Récupérer les données du stream pour obtenir le symbole
+  let symbol: string | undefined;
+  try {
+    const stockData = await DatabaseService.getStockDataById(streamId);
+    symbol = stockData?.symbol;
+  } catch (error) {
+    console.error('Error fetching stock data for breadcrumb:', error);
+  }
+
   return (
     <Navigation
       breadcrumbs={[
-        { label: 'Stream Results' }
+        ...(symbol ? [{ label: symbol, href: `/streams/${symbol}` }] : []),
+        { label: 'Résultats du stream' }
       ]}
       pageTitle="Consultation des résultats"
       pageSubtitle="Visualisation des résultats des segments"

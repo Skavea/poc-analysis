@@ -20,6 +20,7 @@ import ClassificationSuccessNotification from '@/components/ClassificationSucces
 import ExportChartButton from '@/components/ExportChartButton';
 import SegmentGeneratedImage from '@/components/SegmentGeneratedImage';
 import MlValidationBanner from '@/components/MlValidationBanner';
+import SegmentFeedbackForm from '@/components/SegmentFeedbackForm';
 import {
   Box,
   VStack,
@@ -379,6 +380,16 @@ async function SegmentDetailServer({ segmentId }: { segmentId: string }) {
           
           {/* Point Analysis */}
           <PointAnalysisCard analysis={{...analysis, pointsData: pointsData}} />
+
+          {/* Segment Feedback Form - Afficher si le segment a un feedback (créé en mode manuel) */}
+          {analysis.isResultCorrect !== null && analysis.isResultCorrect.trim() !== '' && (
+            <SegmentFeedbackForm
+              segmentId={analysis.id}
+              initialIsResultCorrect={analysis.isResultCorrect}
+              initialResultInterval={analysis.resultInterval}
+              initialResult={analysis.result}
+            />
+          )}
 
           {/* Schema Update Form - En bas si classifié */}
           {isClassified && (

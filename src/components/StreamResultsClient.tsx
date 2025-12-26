@@ -34,6 +34,19 @@ import { StockData, AnalysisResult } from '@/lib/schema';
 interface StreamResultsClientProps {
   stockData: StockData;
   segments: AnalysisResult[];
+  predictionStats?: {
+    totalTests: number;
+    testsCorrect: number;
+    testsIncorrect: number;
+    testsUnanswered: number;
+    successRate: number;
+  };
+  resultStats06?: {
+    totalResults: number;
+    resultsCorrect: number;
+    resultsIncorrect: number;
+    successRate: number;
+  };
 }
 
 interface PointData {
@@ -50,7 +63,37 @@ interface SegmentResultData {
   isExtremity?: boolean; // Indique si c'est une extrémité du segment (début ou fin)
 }
 
-export default function StreamResultsClient({ stockData, segments }: StreamResultsClientProps) {
+// Fonction helper pour déterminer si un segment doit être violet (résultat >= 0.9 ou <= -0.9)
+function shouldBePurple(resultValues: number[]): boolean {
+  return resultValues.some(result => result >= 0.9 || result <= -0.9);
+}
+
+// Fonction helper pour déterminer la couleur d'un segment
+// isCorrect == 0 → faux (noir)
+// isCorrect != 0 → juste (rouge ou violet selon result)
+function getSegmentColor(isCorrect: number, resultValues: number[]): string {
+  if (isCorrect === 0) {
+    // Si isCorrect == 0, c'est faux → noir
+    return '#000000'; // Noir
+  }
+  // Si isCorrect != 0 (peut être 0.125, 0.25, etc.), c'est juste
+  // On regarde result pour déterminer la couleur
+  if (shouldBePurple(resultValues)) {
+    return '#9333ea'; // Violet
+  }
+  return '#ef4444'; // Rouge
+}
+
+// Fonction helper pour déterminer si un segment est juste
+// isCorrect == 0 → faux
+// isCorrect != 0 → juste
+function isSegmentCorrect(isCorrectValues: number[]): boolean {
+  if (isCorrectValues.length === 0) return false;
+  // Un segment est juste si au moins une valeur est != 0
+  return isCorrectValues.some(v => v !== 0);
+}
+
+export default function StreamResultsClient({ stockData, segments, predictionStats, resultStats06 }: StreamResultsClientProps) {
   // Préparer les données pour le premier graphique (tous les points)
   const allPointsData = useMemo(() => {
     if (!stockData.data || typeof stockData.data !== 'object') {
@@ -188,11 +231,14 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         if (prevSegment.isResultCorrect) {
           const prevValues = prevSegment.isResultCorrect.trim().split(/\s+/).map(v => parseFloat(v)).filter(v => !isNaN(v));
           if (prevValues.length > 0) {
-            // Si toutes les valeurs sont >= 0.5, c'est juste
-            previousWasCorrect = prevValues.every(v => v >= 0.5);
+            // Un segment est juste si au moins une valeur est != 0
+            previousWasCorrect = isSegmentCorrect(prevValues);
           }
         }
       }
+      
+      // Déterminer si ce segment est juste
+      const segmentIsCorrect = isSegmentCorrect(normalizedCorrect);
       
       // Déterminer le Y de départ
       let startY: number;
@@ -223,6 +269,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
       }
       
       // Traiter chaque paire (interval, result, isCorrect) pour créer les sous-segments
+      // Les segments noirs sont calculés de la même manière que les segments justes
       let currentTime = startTime;
       let currentSegmentY = startY;
       
@@ -234,6 +281,9 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         // Convertir l'intervalle en millisecondes (on suppose que c'est en minutes)
         const intervalMs = interval * 60 * 1000;
         
+        // Déterminer la couleur pour ce sous-segment
+        const segmentColor = getSegmentColor(isCorrect, normalizedResults);
+        
         // Point de départ de ce sous-segment
         const subSegmentStartY = currentSegmentY;
         // C'est une extrémité seulement si c'est le premier sous-segment
@@ -241,13 +291,15 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         results.push({
           time: currentTime,
           value: subSegmentStartY,
-          color: isCorrect >= 0.5 ? '#ef4444' : '#000000', // Rouge si juste, noir si faux
+          color: segmentColor,
           segmentId: segment.id,
           isExtremity: isStartExtremity,
           pointId: `${segment.id}-${pointCounter++}`,
         });
         
         // Point d'arrivée de ce sous-segment
+        // Les segments noirs sont calculés de la même manière que les segments justes
+        // en utilisant les intervalles et résultats pour la représentation
         const endTime = currentTime + intervalMs;
         // Appliquer un poids logarithmique à l'intervalle : result * log(interval + 1)
         // Cela donne plus de poids aux intervalles supérieurs à 1, mais sans atteindre result * interval
@@ -258,7 +310,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         results.push({
           time: endTime,
           value: endY,
-          color: isCorrect >= 0.5 ? '#ef4444' : '#000000',
+          color: segmentColor,
           segmentId: segment.id,
           isExtremity: isEndExtremity,
           pointId: `${segment.id}-${pointCounter++}`,
@@ -275,8 +327,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
       // Mettre à jour currentY pour le prochain segment
       // Si ce segment était juste, on continue depuis là où il s'est arrêté
       // Si ce segment était faux, on garde currentY (pas de modification)
-      const segmentWasCorrect = normalizedCorrect.every(v => v >= 0.5);
-      if (segmentWasCorrect) {
+      if (segmentIsCorrect) {
         currentY = currentSegmentY;
       }
       // Sinon, currentY reste inchangé (discontinuité)
@@ -349,11 +400,14 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         if (prevSegment.isResultCorrect) {
           const prevValues = prevSegment.isResultCorrect.trim().split(/\s+/).map(v => parseFloat(v)).filter(v => !isNaN(v));
           if (prevValues.length > 0) {
-            // Si toutes les valeurs sont >= 0.5, c'est juste
-            previousWasCorrect = prevValues.every(v => v >= 0.5);
+            // Un segment est juste si au moins une valeur est != 0
+            previousWasCorrect = isSegmentCorrect(prevValues);
           }
         }
       }
+      
+      // Déterminer si ce segment est juste
+      const segmentIsCorrect = isSegmentCorrect(normalizedCorrect);
       
       // Déterminer le Y de départ
       let startY: number;
@@ -384,6 +438,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
       }
       
       // Traiter chaque paire (interval, result, isCorrect) pour créer les sous-segments
+      // Les segments noirs sont calculés de la même manière que les segments justes
       let currentTime = startTime;
       let currentSegmentY = startY;
       
@@ -395,6 +450,9 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         // Convertir l'intervalle en millisecondes (on suppose que c'est en minutes)
         const intervalMs = interval * 60 * 1000;
         
+        // Déterminer la couleur pour ce sous-segment
+        const segmentColor = getSegmentColor(isCorrect, normalizedResults);
+        
         // Point de départ de ce sous-segment
         const subSegmentStartY = currentSegmentY;
         // C'est une extrémité seulement si c'est le premier sous-segment
@@ -402,13 +460,15 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         results.push({
           time: currentTime,
           value: subSegmentStartY,
-          color: isCorrect >= 0.5 ? '#ef4444' : '#000000', // Rouge si juste, noir si faux
+          color: segmentColor,
           segmentId: segment.id,
           isExtremity: isStartExtremity,
           pointId: `${segment.id}-${pointCounter++}`,
         });
         
         // Point d'arrivée de ce sous-segment
+        // Les segments noirs sont calculés de la même manière que les segments justes
+        // en utilisant les intervalles et résultats pour la représentation
         const endTime = currentTime + intervalMs;
         // Appliquer un poids logarithmique à l'intervalle : result * log(interval + 1)
         // Cela donne plus de poids aux intervalles supérieurs à 1, mais sans atteindre result * interval
@@ -419,7 +479,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         results.push({
           time: endTime,
           value: endY,
-          color: isCorrect >= 0.5 ? '#ef4444' : '#000000',
+          color: segmentColor,
           segmentId: segment.id,
           isExtremity: isEndExtremity,
           pointId: `${segment.id}-${pointCounter++}`,
@@ -436,8 +496,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
       // Mettre à jour currentY pour le prochain segment
       // Si ce segment était juste, on continue depuis là où il s'est arrêté
       // Si ce segment était faux, on garde currentY (pas de modification)
-      const segmentWasCorrect = normalizedCorrect.every(v => v >= 0.5);
-      if (segmentWasCorrect) {
+      if (segmentIsCorrect) {
         currentY = currentSegmentY;
       }
       // Sinon, currentY reste inchangé (discontinuité)
@@ -597,10 +656,10 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
   }, [segmentResultsData, allPointsData, chart2YDomain, chart1YDomain]);
 
   // Calculer les segments de courbe lissée pour le graphique 4
-  // Chaque série continue de segments rouges forme une courbe qui :
-  // - Démarre du point de départ du premier segment rouge
-  // - Passe par les points moyens entre chaque paire de segments rouges
-  // - Se termine au point de fin du dernier segment rouge
+  // Chaque série continue de segments justes (rouges/violets) forme une courbe qui :
+  // - Démarre du point de départ du premier segment juste
+  // - Passe par les points moyens entre chaque paire de segments justes
+  // - Se termine au point de fin du dernier segment juste
   const chart4AverageDataSegments = useMemo(() => {
     if (segmentResultsDataForChart3.length === 0) return [];
     
@@ -622,42 +681,52 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           points: sortedPoints,
           startTime: sortedPoints[0]?.time ?? 0,
           isRed: sortedPoints[0]?.color === '#ef4444',
+          isPurple: sortedPoints[0]?.color === '#9333ea',
         };
       })
       .sort((a, b) => a.startTime - b.startTime);
     
-    // Identifier les séries continues de segments rouges
-    const redSeries: Array<Array<typeof sortedSegments[0]>> = [];
+    // Identifier les séries continues de segments justes (rouges OU violets)
+    // Les segments rouges et violets sont traités comme une seule série continue
+    // On garde aussi l'information du segment noir suivant (s'il existe) pour ajuster la fin de la courbe
+    const correctSeries: Array<{ segments: Array<typeof sortedSegments[0]>, nextBlackSegment?: typeof sortedSegments[0] }> = [];
     let currentSeries: Array<typeof sortedSegments[0]> = [];
     
-    sortedSegments.forEach((segment) => {
-      if (segment.isRed) {
-        // Si c'est un segment rouge, l'ajouter à la série actuelle
+    sortedSegments.forEach((segment, index) => {
+      if (segment.isRed || segment.isPurple) {
+        // Si c'est un segment rouge ou violet (juste), l'ajouter à la série actuelle
         currentSeries.push(segment);
       } else {
-        // Si c'est un segment noir, terminer la série actuelle et en commencer une nouvelle
+        // Si c'est un segment noir, terminer la série actuelle avec l'info du segment noir suivant
         if (currentSeries.length > 0) {
-          redSeries.push(currentSeries);
+          correctSeries.push({
+            segments: currentSeries,
+            nextBlackSegment: segment
+          });
           currentSeries = [];
         }
       }
     });
     
-    // Ajouter la dernière série si elle existe
+    // Ajouter la dernière série si elle existe (sans segment noir suivant)
     if (currentSeries.length > 0) {
-      redSeries.push(currentSeries);
+      correctSeries.push({
+        segments: currentSeries
+      });
     }
     
-    // Pour chaque série continue de segments rouges, créer une courbe
+    // Pour chaque série continue de segments justes (rouges/violets), créer une courbe
     // La courbe doit passer par des points fictifs (non affichés) :
-    // - Au niveau de chaque départ et fin de segment rouge
+    // - Au niveau de chaque départ et fin de segment juste
     // - Quand il y a un départ et une fin au même timestamp, utiliser la moyenne
+    // - Si un segment noir suit, ajuster le dernier point pour qu'il soit entre l'avant-dernier point et le premier point noir
     const curveSegments: Array<Array<{ time: number; average: number }>> = [];
     
-    redSeries.forEach((series) => {
+    correctSeries.forEach((seriesData) => {
+      const series = seriesData.segments;
       if (series.length === 0) return;
       
-      // Collecter tous les points de départ et de fin des segments rouges
+      // Collecter tous les points de départ et de fin des segments justes (rouges/violets)
       // Grouper par timestamp pour gérer les cas où départ et fin sont au même timestamp
       const pointsByTime = new Map<number, Array<{ value: number; isStart: boolean; isEnd: boolean }>>();
       
@@ -711,6 +780,31 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
       // Trier par temps pour s'assurer que l'ordre est correct
       curvePoints.sort((a, b) => a.time - b.time);
       
+      // Si un segment noir suit, ajuster le dernier point de la courbe
+      // La courbe doit se terminer entre le dernier point rouge et le premier point noir
+      // (moyenne entre les deux) sans passer par le dernier point rouge
+      if (seriesData.nextBlackSegment && curvePoints.length > 0) {
+        const blackSegmentPoints = seriesData.nextBlackSegment.points.sort((a, b) => a.time - b.time);
+        
+        if (blackSegmentPoints.length > 0) {
+          const firstBlackPoint = blackSegmentPoints[0];
+          const lastRedPoint = curvePoints[curvePoints.length - 1];
+          
+          // Calculer le point intermédiaire entre le dernier point rouge et le premier point noir
+          // (moyenne entre les deux) - cela représente la vraie fin de la courbe
+          const intermediateTime = (lastRedPoint.time + firstBlackPoint.time) / 2;
+          const intermediateValue = (lastRedPoint.average + firstBlackPoint.value) / 2;
+          
+          // Remplacer le dernier point de la courbe par le point intermédiaire
+          // Cela fait que la courbe se termine entre le dernier point rouge et le premier point noir
+          // sans passer par le dernier point rouge lui-même
+          curvePoints[curvePoints.length - 1] = {
+            time: intermediateTime,
+            average: intermediateValue
+          };
+        }
+      }
+      
       if (curvePoints.length > 0) {
         curveSegments.push(curvePoints);
       }
@@ -749,108 +843,449 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     return [startTime, endTime];
   }, [allPointsData, t0Time]);
 
-  // Fonction pour télécharger le premier graphique
-  const handleDownloadChart1 = () => {
-    const svgElement = document.querySelector('#chart1 .recharts-wrapper svg') as SVGElement;
+  // Fonction helper pour diviser un titre en 2 lignes de manière intelligente
+  const splitTitleIntoTwoLines = (title: string, maxWidth: number, fontSize: number = 16): [string, string] => {
+    // Estimation approximative : ~6 pixels par caractère pour font-size 12, ~8 pour font-size 16
+    const charWidth = fontSize <= 12 ? 6 : fontSize * 0.5;
+    const maxCharsPerLine = Math.max(10, Math.floor(maxWidth / charWidth)); // Minimum 10 caractères
+    
+    // Si le titre est assez court, le mettre sur une seule ligne
+    if (title.length <= maxCharsPerLine) {
+      return [title, ''];
+    }
+    
+    // Diviser le titre en mots
+    const words = title.split(' ');
+    
+    // Si un seul mot est plus long que maxCharsPerLine, le couper
+    if (words.length === 1 && words[0].length > maxCharsPerLine) {
+      const midPoint = Math.floor(words[0].length / 2);
+      return [words[0].substring(0, midPoint), words[0].substring(midPoint)];
+    }
+    
+    // Trouver le meilleur point de coupure (au milieu)
+    let firstLine = '';
+    let secondLine = '';
+    let currentLine = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      const testLine = currentLine ? `${currentLine} ${words[i]}` : words[i];
+      
+      // Si on peut ajouter ce mot à la première ligne
+      if (testLine.length <= maxCharsPerLine) {
+        currentLine = testLine;
+      } else {
+        // On a atteint la limite, mettre le reste sur la deuxième ligne
+        if (currentLine) {
+          firstLine = currentLine;
+          secondLine = words.slice(i).join(' ');
+        } else {
+          // Le mot seul est trop long, le couper
+          const midPoint = Math.floor(words[i].length / 2);
+          firstLine = words[i].substring(0, midPoint);
+          secondLine = words[i].substring(midPoint) + (i < words.length - 1 ? ' ' + words.slice(i + 1).join(' ') : '');
+        }
+        break;
+      }
+    }
+    
+    // Si on n'a pas rempli la première ligne, équilibrer
+    if (!firstLine && currentLine) {
+      firstLine = currentLine;
+    }
+    
+    // Si la deuxième ligne est vide mais qu'on a plusieurs mots, essayer de mieux équilibrer
+    if (!secondLine && words.length > 1 && firstLine) {
+      // Si la première ligne est trop courte, rééquilibrer
+      if (firstLine.length < title.length * 0.3) {
+        const midPoint = Math.floor(words.length / 2);
+        firstLine = words.slice(0, midPoint).join(' ');
+        secondLine = words.slice(midPoint).join(' ');
+      } else {
+        // La première ligne est bonne, mettre le reste sur la deuxième
+        const firstLineWords = firstLine.split(' ');
+        const firstLineWordCount = firstLineWords.length;
+        if (firstLineWordCount < words.length) {
+          secondLine = words.slice(firstLineWordCount).join(' ');
+        }
+      }
+    }
+    
+    // Vérifier que la deuxième ligne n'est pas trop longue
+    if (secondLine && secondLine.length > maxCharsPerLine) {
+      // Si la deuxième ligne est trop longue, essayer de mieux équilibrer
+      const allWords = title.split(' ');
+      const midPoint = Math.floor(allWords.length / 2);
+      firstLine = allWords.slice(0, midPoint).join(' ');
+      secondLine = allWords.slice(midPoint).join(' ');
+    }
+    
+    return [firstLine || title, secondLine];
+  };
+
+  // Fonction helper pour créer un SVG complet avec titre et légendes
+  const createCompleteSVG = (
+    chartId: string,
+    title: string,
+    xAxisLabel: string,
+    yAxisLabel: string,
+    legends: Array<{ color: string; text: string }>,
+    correlationStats?: {
+      averageRate?: number;
+      highIntensityRate?: number;
+    }
+  ): string => {
+    const svgElement = document.querySelector(`#${chartId} .recharts-wrapper svg`) as SVGElement;
     if (!svgElement) {
-      alert('Graphique non trouvé');
-      return;
+      throw new Error('Graphique non trouvé');
     }
     
     const svgClone = svgElement.cloneNode(true) as SVGElement;
-    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svgClone.setAttribute('width', svgElement.clientWidth.toString());
-    svgClone.setAttribute('height', svgElement.clientHeight.toString());
+    const chartWidth = svgElement.clientWidth || 800;
+    const chartHeight = svgElement.clientHeight || 400;
     
-    const svgString = new XMLSerializer().serializeToString(svgClone);
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
+    // Espace pour le titre en haut (augmenté pour 2 lignes)
+    const titleHeight = 60;
+    // Espace pour les légendes en bas (sera calculé dynamiquement)
+    const baseLegendHeight = 40;
+    // Espace pour le label Y à gauche
+    const yLabelWidth = 80;
+    // Espace pour le label X en bas
+    const xLabelHeight = 30;
     
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `stream-all-points-${stockData.id}-${new Date().toISOString()}.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    // Maximum de légendes par ligne
+    const maxLegendsPerLine = 3;
+    
+    // Calculer la hauteur nécessaire pour les légendes
+    const calcLegendStartX = yLabelWidth + 20;
+    const calcAvailableWidthPerLegend = ((chartWidth + yLabelWidth) - calcLegendStartX - 20) / maxLegendsPerLine;
+    const calcAvailableTextWidthPerLegend = calcAvailableWidthPerLegend - 40 - 8 - 15; // ligne + espace + spacing
+    const calcLegendLineHeight = 18;
+    
+    let legendHeight = baseLegendHeight;
+    let calcLegendsInCurrentLine = 0;
+    let calcCurrentLegendY = 0;
+    
+    legends.forEach((legend) => {
+      // Si on a déjà 3 légendes sur cette ligne, passer à la ligne suivante
+      if (calcLegendsInCurrentLine >= maxLegendsPerLine) {
+        calcCurrentLegendY += calcLegendLineHeight * 2 + 5; // 2 lignes max par légende + espacement
+        calcLegendsInCurrentLine = 0;
+      }
+      
+      const legendTextLines = splitTitleIntoTwoLines(legend.text, calcAvailableTextWidthPerLegend, 12);
+      const hasSecondLine = legendTextLines[1] !== '';
+      
+      // Mettre à jour la hauteur totale nécessaire
+      const neededHeight = calcCurrentLegendY + calcLegendLineHeight * (hasSecondLine ? 2 : 1) + 20;
+      if (neededHeight > legendHeight) {
+        legendHeight = neededHeight;
+      }
+      
+      calcLegendsInCurrentLine++;
+    });
+    
+    // Ajouter de l'espace pour les stats de corrélation si présentes
+    let statsHeight = 0;
+    if (correlationStats && (correlationStats.averageRate !== undefined || correlationStats.highIntensityRate !== undefined)) {
+      statsHeight = 50; // Espace pour les 2 lignes de stats + espacement
+    }
+    
+    const totalWidth = chartWidth + yLabelWidth;
+    const totalHeight = titleHeight + chartHeight + xLabelHeight + legendHeight + statsHeight;
+    
+    // Créer un nouveau SVG wrapper
+    const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    wrapper.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    wrapper.setAttribute('width', totalWidth.toString());
+    wrapper.setAttribute('height', totalHeight.toString());
+    wrapper.setAttribute('viewBox', `0 0 ${totalWidth} ${totalHeight}`);
+    
+    // Diviser le titre en 2 lignes
+    const availableWidth = totalWidth - 40; // Marge de 20px de chaque côté
+    const [firstLine, secondLine] = splitTitleIntoTwoLines(title, availableWidth, 16);
+    
+    // Ajouter la première ligne du titre
+    const titleElement1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    titleElement1.setAttribute('x', (totalWidth / 2).toString());
+    titleElement1.setAttribute('y', '20');
+    titleElement1.setAttribute('text-anchor', 'middle');
+    titleElement1.setAttribute('font-size', '16');
+    titleElement1.setAttribute('font-weight', 'bold');
+    titleElement1.setAttribute('fill', '#000000');
+    titleElement1.textContent = firstLine;
+    wrapper.appendChild(titleElement1);
+    
+    // Ajouter la deuxième ligne du titre si elle existe
+    if (secondLine) {
+      const titleElement2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      titleElement2.setAttribute('x', (totalWidth / 2).toString());
+      titleElement2.setAttribute('y', '40');
+      titleElement2.setAttribute('text-anchor', 'middle');
+      titleElement2.setAttribute('font-size', '16');
+      titleElement2.setAttribute('font-weight', 'bold');
+      titleElement2.setAttribute('fill', '#000000');
+      titleElement2.textContent = secondLine;
+      wrapper.appendChild(titleElement2);
+    }
+    
+    // Déplacer le graphique SVG original
+    svgClone.setAttribute('x', yLabelWidth.toString());
+    svgClone.setAttribute('y', titleHeight.toString());
+    wrapper.appendChild(svgClone);
+    
+    // Ajouter le label Y (renversé)
+    const yLabelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    yLabelGroup.setAttribute('transform', `translate(${yLabelWidth / 2}, ${titleHeight + chartHeight / 2}) rotate(-90)`);
+    const yLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yLabelText.setAttribute('text-anchor', 'middle');
+    yLabelText.setAttribute('font-size', '12');
+    yLabelText.setAttribute('fill', '#666666');
+    yLabelText.textContent = yAxisLabel;
+    yLabelGroup.appendChild(yLabelText);
+    wrapper.appendChild(yLabelGroup);
+    
+    // Ajouter le label X
+    const xLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    xLabelText.setAttribute('x', (totalWidth / 2).toString());
+    xLabelText.setAttribute('y', (titleHeight + chartHeight + xLabelHeight / 2 + 5).toString());
+    xLabelText.setAttribute('text-anchor', 'middle');
+    xLabelText.setAttribute('font-size', '12');
+    xLabelText.setAttribute('fill', '#666666');
+    xLabelText.textContent = xAxisLabel;
+    wrapper.appendChild(xLabelText);
+    
+    // Ajouter les légendes avec gestion du retour à la ligne
+    let legendX = yLabelWidth + 20;
+    let currentLegendY = titleHeight + chartHeight + xLabelHeight + 20;
+    const legendLineLength = 40;
+    const legendSpacing = 15;
+    const legendLineHeight = 18; // Hauteur d'une ligne de légende
+    const legendStartX = yLabelWidth + 20;
+    
+    // Calculer la largeur disponible pour chaque légende (en divisant par le nombre max de légendes par ligne)
+    const availableWidthPerLegend = (totalWidth - legendStartX - 20) / maxLegendsPerLine; // Marge droite de 20px
+    const availableTextWidthPerLegend = availableWidthPerLegend - legendLineLength - 8 - legendSpacing;
+    
+    let legendsInCurrentLine = 0;
+    
+    legends.forEach((legend, index) => {
+      // Si on a déjà 3 légendes sur cette ligne, passer à la ligne suivante
+      if (legendsInCurrentLine >= maxLegendsPerLine) {
+        legendX = legendStartX;
+        currentLegendY += legendLineHeight * 2 + 5; // Espacement entre les lignes (2 lignes max par légende)
+        legendsInCurrentLine = 0;
+      }
+      
+      // Diviser le texte de la légende en lignes si nécessaire
+      // Utiliser la largeur disponible pour une légende
+      const legendTextLines = splitTitleIntoTwoLines(legend.text, availableTextWidthPerLegend, 12);
+      
+      // Ligne de couleur (alignée avec la première ligne de texte)
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', legendX.toString());
+      line.setAttribute('y1', (currentLegendY + 4).toString());
+      line.setAttribute('x2', (legendX + legendLineLength).toString());
+      line.setAttribute('y2', (currentLegendY + 4).toString());
+      line.setAttribute('stroke', legend.color);
+      line.setAttribute('stroke-width', '2');
+      wrapper.appendChild(line);
+      
+      // Première ligne du texte de la légende
+      const legendText1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      legendText1.setAttribute('x', (legendX + legendLineLength + 8).toString());
+      legendText1.setAttribute('y', (currentLegendY + 4).toString());
+      legendText1.setAttribute('font-size', '12');
+      legendText1.setAttribute('fill', '#666666');
+      legendText1.textContent = legendTextLines[0];
+      wrapper.appendChild(legendText1);
+      
+      // Deuxième ligne du texte de la légende si nécessaire
+      if (legendTextLines[1]) {
+        const legendText2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        legendText2.setAttribute('x', (legendX + legendLineLength + 8).toString());
+        legendText2.setAttribute('y', (currentLegendY + legendLineHeight + 4).toString());
+        legendText2.setAttribute('font-size', '12');
+        legendText2.setAttribute('fill', '#666666');
+        legendText2.textContent = legendTextLines[1];
+        wrapper.appendChild(legendText2);
+      }
+      
+      // Passer à la prochaine position (largeur fixe par légende)
+      legendX += availableWidthPerLegend;
+      legendsInCurrentLine++;
+    });
+    
+    // Ajouter les stats de corrélation si fournies (uniquement pour le graphique 4)
+    if (correlationStats) {
+      const statsY = currentLegendY + legendLineHeight + 10;
+      let statsOffset = 0;
+      
+      if (correlationStats.averageRate !== undefined) {
+        const statsLabel1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        statsLabel1.setAttribute('x', (yLabelWidth + 20).toString());
+        statsLabel1.setAttribute('y', (statsY + statsOffset).toString());
+        statsLabel1.setAttribute('font-size', '12');
+        statsLabel1.setAttribute('fill', '#666666');
+        statsLabel1.setAttribute('font-weight', '500');
+        statsLabel1.textContent = 'Taux de corrélation moyen :';
+        wrapper.appendChild(statsLabel1);
+        
+        const statsValue1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        const value1X = yLabelWidth + 20 + 200; // Position après le label
+        statsValue1.setAttribute('x', value1X.toString());
+        statsValue1.setAttribute('y', (statsY + statsOffset).toString());
+        statsValue1.setAttribute('font-size', '12');
+        statsValue1.setAttribute('fill', correlationStats.averageRate >= 50 ? '#16a34a' : '#dc2626');
+        statsValue1.setAttribute('font-weight', 'bold');
+        statsValue1.textContent = `${correlationStats.averageRate.toFixed(2)}%`;
+        wrapper.appendChild(statsValue1);
+        
+        statsOffset += 20;
+      }
+      
+      if (correlationStats.highIntensityRate !== undefined) {
+        const statsLabel2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        statsLabel2.setAttribute('x', (yLabelWidth + 20).toString());
+        statsLabel2.setAttribute('y', (statsY + statsOffset).toString());
+        statsLabel2.setAttribute('font-size', '12');
+        statsLabel2.setAttribute('fill', '#666666');
+        statsLabel2.setAttribute('font-weight', '500');
+        statsLabel2.textContent = 'Taux de corrélation à forte intensité :';
+        wrapper.appendChild(statsLabel2);
+        
+        const statsValue2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        const value2X = yLabelWidth + 20 + 280; // Position après le label
+        statsValue2.setAttribute('x', value2X.toString());
+        statsValue2.setAttribute('y', (statsY + statsOffset).toString());
+        statsValue2.setAttribute('font-size', '12');
+        statsValue2.setAttribute('fill', correlationStats.highIntensityRate >= 50 ? '#16a34a' : '#dc2626');
+        statsValue2.setAttribute('font-weight', 'bold');
+        statsValue2.textContent = `${correlationStats.highIntensityRate.toFixed(2)}%`;
+        wrapper.appendChild(statsValue2);
+      }
+    }
+    
+    return new XMLSerializer().serializeToString(wrapper);
+  };
+
+  // Fonction pour télécharger le premier graphique
+  const handleDownloadChart1 = () => {
+    try {
+      const title = `Graphique 1 : Graphique du cours de ${stockData.symbol} le ${stockData.date}`;
+      const xAxisLabel = 'Temps en Heure:Minutes';
+      const yAxisLabel = 'Prix du cours en Dollars US ($)';
+      const legends = [
+        { color: '#3b82f6', text: 'prix du cours du marché en fonction du temps' }
+      ];
+      
+      const svgString = createCompleteSVG('chart1', title, xAxisLabel, yAxisLabel, legends);
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `stream-all-points-${stockData.id}-${new Date().toISOString()}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Erreur lors du téléchargement du graphique');
+      console.error(error);
+    }
   };
 
   // Fonction pour télécharger le second graphique
   const handleDownloadChart2 = () => {
-    const svgElement = document.querySelector('#chart2 .recharts-wrapper svg') as SVGElement;
-    if (!svgElement) {
-      alert('Graphique non trouvé');
-      return;
+    try {
+      const title = `Graphique 2 : Graphique des anticipations du cours de ${stockData.symbol} le ${stockData.date}`;
+      const xAxisLabel = 'Temps en Heure:Minutes';
+      const yAxisLabel = 'Intensité des prédictions (unité arbitraire)';
+      const legends = [
+        { color: '#ef4444', text: 'prédiction juste avec une tendance faible' },
+        { color: '#9333ea', text: 'prédiction juste avec une tendance forte' },
+        { color: '#000000', text: 'prédiction non vérifiable nécessitant un ajustement' }
+      ];
+      
+      const svgString = createCompleteSVG('chart2', title, xAxisLabel, yAxisLabel, legends);
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `stream-results-${stockData.id}-${new Date().toISOString()}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Erreur lors du téléchargement du graphique');
+      console.error(error);
     }
-    
-    const svgClone = svgElement.cloneNode(true) as SVGElement;
-    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svgClone.setAttribute('width', svgElement.clientWidth.toString());
-    svgClone.setAttribute('height', svgElement.clientHeight.toString());
-    
-    const svgString = new XMLSerializer().serializeToString(svgClone);
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `stream-results-${stockData.id}-${new Date().toISOString()}.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   // Fonction pour télécharger le graphique combiné
   const handleDownloadChart3 = () => {
-    const svgElement = document.querySelector('#chart3 .recharts-wrapper svg') as SVGElement;
-    if (!svgElement) {
-      alert('Graphique non trouvé');
-      return;
+    try {
+      const title = `Graphique 3 : Graphique du cours de ${stockData.symbol} le ${stockData.date} avec les anticipations réalisées et représentée dans le graphique 2, reportées sur le moment du cours où elles ont eu lieu`;
+      const xAxisLabel = 'Temps en Heure:Minutes';
+      const yAxisLabel = 'Prix du cours en Dollars US ($)';
+      const legends = [
+        { color: '#3b82f6', text: 'prix du cours du marché en fonction du temps' },
+        { color: '#ef4444', text: 'prédiction juste avec une tendance faible' },
+        { color: '#9333ea', text: 'prédiction juste avec une tendance forte' },
+        { color: '#000000', text: 'prédiction non vérifiable nécessitant un ajustement' }
+      ];
+      
+      const svgString = createCompleteSVG('chart3', title, xAxisLabel, yAxisLabel, legends);
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `stream-combined-${stockData.id}-${new Date().toISOString()}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Erreur lors du téléchargement du graphique');
+      console.error(error);
     }
-    
-    const svgClone = svgElement.cloneNode(true) as SVGElement;
-    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svgClone.setAttribute('width', svgElement.clientWidth.toString());
-    svgClone.setAttribute('height', svgElement.clientHeight.toString());
-    
-    const svgString = new XMLSerializer().serializeToString(svgClone);
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `stream-combined-${stockData.id}-${new Date().toISOString()}.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   // Fonction pour télécharger le quatrième graphique
   const handleDownloadChart4 = () => {
-    const svgElement = document.querySelector('#chart4 .recharts-wrapper svg') as SVGElement;
-    if (!svgElement) {
-      alert('Graphique non trouvé');
-      return;
+    try {
+      const title = `Graphique 4 : Corrélation comportementale a l'actif ${stockData.symbol} le ${stockData.date}`;
+      const xAxisLabel = 'Temps en Heure:Minutes';
+      const yAxisLabel = 'Prix du cours en Dollars US ($)';
+      const legends = [
+        { color: '#3b82f6', text: 'prix du cours du marché en fonction du temps' },
+        { color: '#ef4444', text: 'Corrélation comportementale vérifiée à la courbe' }
+      ];
+      
+      const correlationStats = {
+        averageRate: predictionStats?.successRate,
+        highIntensityRate: resultStats06?.successRate,
+      };
+      
+      const svgString = createCompleteSVG('chart4', title, xAxisLabel, yAxisLabel, legends, correlationStats);
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `stream-smoothed-${stockData.id}-${new Date().toISOString()}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Erreur lors du téléchargement du graphique');
+      console.error(error);
     }
-    
-    const svgClone = svgElement.cloneNode(true) as SVGElement;
-    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svgClone.setAttribute('width', svgElement.clientWidth.toString());
-    svgClone.setAttribute('height', svgElement.clientHeight.toString());
-    
-    const svgString = new XMLSerializer().serializeToString(svgClone);
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `stream-smoothed-${stockData.id}-${new Date().toISOString()}.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   // Formater le temps pour l'axe X
@@ -860,6 +1295,8 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
   };
 
   // Calculer des ticks réguliers pour les axes X
+  // Toujours inclure le premier et le dernier point, puis répartir les autres de manière homogène
+  // Le nombre de ticks est ajusté pour éviter le chevauchement des labels
   const calculateXAxisTicks = useMemo(() => {
     if (allPointsData.length === 0) return [];
     
@@ -867,22 +1304,48 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     const endTime = allPointsData[allPointsData.length - 1].timestamp;
     const range = endTime - startTime;
     
-    // Calculer un intervalle raisonnable (environ 30 ticks pour 5 fois plus de valeurs)
-    const targetTicks = 30;
+    if (range === 0) {
+      return [startTime];
+    }
+    
+    // Estimer la largeur nécessaire pour chaque label (format "HH:MM" = ~50-60px)
+    // En supposant une largeur de graphique d'environ 800-1000px (avec padding de 60px à gauche)
+    const estimatedLabelWidth = 55; // pixels par label
+    const estimatedChartWidth = 850; // pixels disponibles pour les ticks (approximation)
+    const maxTicks = Math.max(2, Math.floor(estimatedChartWidth / estimatedLabelWidth));
+    
+    // Utiliser un nombre raisonnable de ticks (entre 6 et maxTicks)
+    // Cela garantit un bon remplissage sans chevauchement
+    const targetTicks = Math.min(Math.max(6, maxTicks), 20); // Entre 6 et 20 ticks maximum
+    
+    // Si on a seulement 1 ou 2 ticks, retourner juste le début et la fin
+    if (targetTicks <= 2) {
+      return [startTime, endTime];
+    }
+    
+    // Calculer l'intervalle pour répartir les ticks de manière homogène
     const interval = range / (targetTicks - 1);
     
-    // Générer les ticks réguliers, en s'assurant que le premier et le dernier sont inclus
+    // Générer les ticks réguliers, en s'assurant que le premier et le dernier sont toujours inclus
     const ticks: number[] = [startTime]; // Toujours inclure la première valeur
+    
+    // Générer les ticks intermédiaires
     for (let i = 1; i < targetTicks - 1; i++) {
       const tickTime = startTime + (interval * i);
-      ticks.push(tickTime);
+      ticks.push(Math.round(tickTime));
     }
+    
     ticks.push(endTime); // Toujours inclure la dernière valeur
     
-    return ticks;
+    // S'assurer qu'il n'y a pas de doublons et que les ticks sont triés
+    const uniqueTicks = Array.from(new Set(ticks)).sort((a, b) => a - b);
+    
+    return uniqueTicks;
   }, [allPointsData, t0Time]);
 
   // Calculer des ticks réguliers pour l'axe Y du graphique 1 (prix)
+  // Toujours inclure le premier et le dernier point, puis répartir les autres de manière homogène
+  // Le nombre de ticks est ajusté pour éviter le chevauchement des labels
   const calculateChart1YTicks = useMemo(() => {
     if (chart1Data.length === 0) return [];
     
@@ -898,21 +1361,49 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     const domainMax = typeof domain[1] === 'number' ? domain[1] : maxPrice;
     
     const range = domainMax - domainMin;
-    const targetTicks = 30;
+    
+    if (range === 0) {
+      return [domainMin];
+    }
+    
+    // Estimer la hauteur nécessaire pour chaque label (format "$XX.XX" = ~20-25px)
+    // En supposant une hauteur de graphique d'environ 400px
+    const estimatedLabelHeight = 22; // pixels par label
+    const estimatedChartHeight = 380; // pixels disponibles pour les ticks (approximation, avec marges)
+    const maxTicks = Math.max(2, Math.floor(estimatedChartHeight / estimatedLabelHeight));
+    
+    // Utiliser un nombre raisonnable de ticks (entre 6 et maxTicks)
+    // Cela garantit un bon remplissage sans chevauchement
+    const targetTicks = Math.min(Math.max(6, maxTicks), 18); // Entre 6 et 18 ticks maximum
+    
+    // Si on a seulement 1 ou 2 ticks, retourner juste le début et la fin
+    if (targetTicks <= 2) {
+      return [domainMin, domainMax];
+    }
+    
+    // Calculer l'intervalle pour répartir les ticks de manière homogène
     const interval = range / (targetTicks - 1);
     
-    // Générer les ticks réguliers, en s'assurant que le premier et le dernier sont inclus
+    // Générer les ticks réguliers, en s'assurant que le premier et le dernier sont toujours inclus
     const ticks: number[] = [domainMin]; // Toujours inclure la première valeur
+    
+    // Générer les ticks intermédiaires
     for (let i = 1; i < targetTicks - 1; i++) {
       const tickValue = domainMin + (interval * i);
-      ticks.push(tickValue);
+      // Arrondir à 2 décimales pour les prix
+      ticks.push(Math.round(tickValue * 100) / 100);
     }
+    
     ticks.push(domainMax); // Toujours inclure la dernière valeur
     
-    return ticks;
+    // S'assurer qu'il n'y a pas de doublons et que les ticks sont triés
+    const uniqueTicks = Array.from(new Set(ticks)).sort((a, b) => a - b);
+    
+    return uniqueTicks;
   }, [chart1Data, chart1YDomain]);
 
   // Calculer des ticks réguliers pour l'axe Y du graphique 2 (valeurs)
+  // Toujours inclure le min, le max du domaine et le 0 (centré visuellement)
   const calculateChart2YTicks = useMemo(() => {
     if (segmentResultsData.length === 0) return [];
     
@@ -928,18 +1419,82 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
     const domainMax = typeof domain[1] === 'number' ? domain[1] : maxValue;
     
     const range = domainMax - domainMin;
-    const targetTicks = 30;
-    const interval = range / (targetTicks - 1);
     
-    // Générer les ticks réguliers, en s'assurant que le premier et le dernier sont inclus
-    const ticks: number[] = [domainMin]; // Toujours inclure la première valeur
-    for (let i = 1; i < targetTicks - 1; i++) {
-      const tickValue = domainMin + (interval * i);
-      ticks.push(tickValue);
+    if (range === 0) {
+      return [domainMin];
     }
-    ticks.push(domainMax); // Toujours inclure la dernière valeur
     
-    return ticks;
+    // Estimer la hauteur nécessaire pour chaque label
+    const estimatedLabelHeight = 22; // pixels par label
+    const estimatedChartHeight = 380; // pixels disponibles pour les ticks
+    const maxTicks = Math.max(2, Math.floor(estimatedChartHeight / estimatedLabelHeight));
+    
+    // Utiliser un nombre raisonnable de ticks (entre 6 et maxTicks)
+    const targetTicks = Math.min(Math.max(6, maxTicks), 18);
+    
+    // Ticks fixes : toujours inclure min, max et 0 (si dans le domaine)
+    const ticks: number[] = [domainMin, domainMax];
+    
+    // Ajouter 0 s'il est dans le domaine
+    const hasZero = 0 >= domainMin && 0 <= domainMax;
+    if (hasZero) {
+      ticks.push(0);
+    }
+    
+    // Si on a seulement les ticks fixes, les retourner triés
+    if (ticks.length >= targetTicks) {
+      return Array.from(new Set(ticks)).sort((a, b) => a - b);
+    }
+    
+    // Calculer combien de ticks supplémentaires on peut ajouter
+    const remainingTicks = targetTicks - ticks.length;
+    
+    if (hasZero) {
+      // Répartir les ticks de manière symétrique autour de 0 pour le centrer visuellement
+      const rangeBeforeZero = Math.abs(0 - domainMin);
+      const rangeAfterZero = Math.abs(domainMax - 0);
+      const totalRange = rangeBeforeZero + rangeAfterZero;
+      
+      // Calculer le nombre de ticks de chaque côté de 0
+      const ticksBeforeZero = Math.max(1, Math.floor((rangeBeforeZero / totalRange) * remainingTicks));
+      const ticksAfterZero = remainingTicks - ticksBeforeZero;
+      
+      // Ajouter les ticks avant 0
+      if (ticksBeforeZero > 0 && rangeBeforeZero > 0) {
+        const intervalBefore = rangeBeforeZero / (ticksBeforeZero + 1);
+        for (let i = 1; i <= ticksBeforeZero; i++) {
+          const tickValue = domainMin + (intervalBefore * i);
+          if (tickValue < 0 && tickValue > domainMin) {
+            ticks.push(Math.round(tickValue * 100) / 100);
+          }
+        }
+      }
+      
+      // Ajouter les ticks après 0
+      if (ticksAfterZero > 0 && rangeAfterZero > 0) {
+        const intervalAfter = rangeAfterZero / (ticksAfterZero + 1);
+        for (let i = 1; i <= ticksAfterZero; i++) {
+          const tickValue = 0 + (intervalAfter * i);
+          if (tickValue > 0 && tickValue < domainMax) {
+            ticks.push(Math.round(tickValue * 100) / 100);
+          }
+        }
+      }
+    } else {
+      // Pas de 0 dans le domaine, répartir uniformément
+      const interval = range / (remainingTicks + 1);
+      for (let i = 1; i <= remainingTicks; i++) {
+        const tickValue = domainMin + (interval * i);
+        if (tickValue < domainMax) {
+          ticks.push(Math.round(tickValue * 100) / 100);
+        }
+      }
+    }
+    
+    // S'assurer qu'il n'y a pas de doublons et que les ticks sont triés
+    const uniqueTicks = Array.from(new Set(ticks)).sort((a, b) => a - b);
+    
+    return uniqueTicks;
   }, [segmentResultsData, chart2YDomain]);
 
   if (allPointsData.length === 0) {
@@ -981,7 +1536,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         <Card.Header>
           <HStack justify="space-between" align="center" w="100%">
             <Heading size="md" color="fg.default">
-              Graphique de tous les points
+              Graphique 1 : Graphique du cours de {stockData.symbol} le {stockData.date}
             </Heading>
             <Button
               size="sm"
@@ -995,43 +1550,78 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           </HStack>
         </Card.Header>
         <Card.Body>
-          <Box id="chart1" width="100%" height={400}>
-            {allPointsData.length === 0 ? (
-              <Box display="flex" alignItems="center" justifyContent="center" height="100%">
-                <Text color="fg.muted">Aucune donnée à afficher ({Object.keys(stockData.data || {}).length} clés dans data)</Text>
-              </Box>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chart1Data}>
-                  <XAxis
-                    dataKey="timestamp"
-                    type="number"
-                    scale="time"
-                    domain={chart1XDomain}
-                    tickFormatter={formatTime}
-                    ticks={calculateXAxisTicks}
-                  />
-                  <YAxis 
-                    domain={chart1YDomain}
-                    tickFormatter={(value) => `$${value.toFixed(2)}`}
-                    ticks={calculateChart1YTicks}
-                  />
-                  <Tooltip
-                    labelFormatter={(value) => formatTime(Number(value))}
-                    formatter={(value: number) => [value.toFixed(2), 'Prix']}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="price"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </Box>
+          <VStack gap={2} align="stretch">
+            {/* Graphique avec labels */}
+            <Box position="relative" width="100%" height={400}>
+              {allPointsData.length === 0 ? (
+                <Box display="flex" alignItems="center" justifyContent="center" height="100%">
+                  <Text color="fg.muted">Aucune donnée à afficher ({Object.keys(stockData.data || {}).length} clés dans data)</Text>
+                </Box>
+              ) : (
+                <>
+                  {/* Label Y (renversé, de bas en haut) */}
+                  <Box
+                    position="absolute"
+                    left="-60px"
+                    top="50%"
+                    transform="translateY(-50%) rotate(-90deg)"
+                    transformOrigin="center"
+                    whiteSpace="nowrap"
+                  >
+                    <Text fontSize="sm" color="fg.muted">
+                      Prix du cours en Dollars US ($)
+                    </Text>
+                  </Box>
+                  <Box id="chart1" width="100%" height="100%" pl="60px">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chart1Data}>
+                        <XAxis
+                          dataKey="timestamp"
+                          type="number"
+                          scale="time"
+                          domain={chart1XDomain}
+                          tickFormatter={formatTime}
+                          ticks={calculateXAxisTicks}
+                        />
+                        <YAxis 
+                          domain={chart1YDomain}
+                          tickFormatter={(value) => `$${value.toFixed(2)}`}
+                          ticks={calculateChart1YTicks}
+                        />
+                        <Tooltip
+                          labelFormatter={(value) => formatTime(Number(value))}
+                          formatter={(value: number) => [value.toFixed(2), 'Prix']}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="price"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </>
+              )}
+            </Box>
+            {/* Label X */}
+            <Box textAlign="center" mt={-2}>
+              <Text fontSize="sm" color="fg.muted">
+                Temps en Heure:Minutes
+              </Text>
+            </Box>
+            {/* Légende */}
+            <HStack gap={4} mt={2} pl="60px">
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#3b82f6" />
+                <Text fontSize="sm" color="fg.muted">
+                  prix du cours du marché en fonction du temps
+                </Text>
+              </HStack>
+            </HStack>
+          </VStack>
         </Card.Body>
       </Card.Root>
 
@@ -1040,7 +1630,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         <Card.Header>
           <HStack justify="space-between" align="center" w="100%">
             <Heading size="md" color="fg.default">
-              Résultats des segments
+              Graphique 2 : Graphique des anticipations du cours de {stockData.symbol} le {stockData.date}
             </Heading>
             <Button
               size="sm"
@@ -1054,27 +1644,43 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           </HStack>
         </Card.Header>
         <Card.Body>
-          <Box id="chart2" width="100%" height={400}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={segmentResultsData}>
-                <XAxis
-                  dataKey="time"
-                  type="number"
-                  scale="linear"
-                  domain={chart2XDomain}
-                  tickFormatter={formatTime}
-                  allowDataOverflow={false}
-                  ticks={calculateXAxisTicks}
-                />
-                <YAxis 
-                  domain={chart2YDomain}
-                  tickFormatter={(value) => value.toFixed(2)}
-                  ticks={calculateChart2YTicks}
-                />
-                <Tooltip
-                  labelFormatter={(value) => formatTime(Number(value))}
-                  formatter={(value: number) => [value.toFixed(2), 'Valeur']}
-                />
+          <VStack gap={2} align="stretch">
+            {/* Graphique avec labels */}
+            <Box position="relative" width="100%" height={400}>
+              {/* Label Y (renversé, de bas en haut) */}
+              <Box
+                position="absolute"
+                left="-60px"
+                top="50%"
+                transform="translateY(-50%) rotate(-90deg)"
+                transformOrigin="center"
+                whiteSpace="nowrap"
+              >
+                <Text fontSize="sm" color="fg.muted">
+                  Intensité des prédictions (unité arbitraire)
+                </Text>
+              </Box>
+              <Box id="chart2" width="100%" height="100%" pl="60px">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={segmentResultsData}>
+                    <XAxis
+                      dataKey="time"
+                      type="number"
+                      scale="linear"
+                      domain={chart2XDomain}
+                      tickFormatter={formatTime}
+                      allowDataOverflow={false}
+                      ticks={calculateXAxisTicks}
+                    />
+                    <YAxis 
+                      domain={chart2YDomain}
+                      tickFormatter={(value) => value.toFixed(2)}
+                      ticks={calculateChart2YTicks}
+                    />
+                    <Tooltip
+                      labelFormatter={(value) => formatTime(Number(value))}
+                      formatter={(value: number) => [value.toFixed(2), 'Valeur']}
+                    />
                 {/* Dessiner une ligne continue avec changement de couleur par segment */}
                 {(() => {
                   // Trier tous les points par temps pour assurer la continuité
@@ -1153,9 +1759,38 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                     );
                   });
                 })()}
-              </LineChart>
-            </ResponsiveContainer>
-          </Box>
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            </Box>
+            {/* Label X */}
+            <Box textAlign="center" mt={-2}>
+              <Text fontSize="sm" color="fg.muted">
+                Temps en Heure:Minutes
+              </Text>
+            </Box>
+            {/* Légende */}
+            <HStack gap={4} mt={2} pl="60px" flexWrap="wrap">
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#ef4444" />
+                <Text fontSize="sm" color="fg.muted">
+                  prédiction juste avec une tendance faible
+                </Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#9333ea" />
+                <Text fontSize="sm" color="fg.muted">
+                  prédiction juste avec une tendance forte
+                </Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#000000" />
+                <Text fontSize="sm" color="fg.muted">
+                  prédiction non vérifiable nécessitant un ajustement
+                </Text>
+              </HStack>
+            </HStack>
+          </VStack>
         </Card.Body>
       </Card.Root>
 
@@ -1164,7 +1799,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         <Card.Header>
           <HStack justify="space-between" align="center" w="100%">
             <Heading size="md" color="fg.default">
-              Graphique combiné (Prix + Résultats)
+              Graphique 3 : Graphique du cours de {stockData.symbol} le {stockData.date} avec les anticipations réalisées et représentée dans le graphique 2, reportées sur le moment du cours où elles ont eu lieu
             </Heading>
             <Button
               size="sm"
@@ -1178,25 +1813,41 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           </HStack>
         </Card.Header>
         <Card.Body>
-          <Box id="chart3" width="100%" height={400}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart>
-                <XAxis
-                  dataKey="time"
-                  type="number"
-                  scale="time"
-                  domain={chart3XDomain}
-                  tickFormatter={formatTime}
-                  allowDataOverflow={false}
-                  ticks={calculateXAxisTicks}
-                />
-                {/* Axe Y gauche pour les prix (utilisé aussi pour les segments positionnés) */}
-                <YAxis 
-                  yAxisId="left"
-                  domain={chart1YDomain}
-                  tickFormatter={(value) => `$${value.toFixed(2)}`}
-                  ticks={calculateChart1YTicks}
-                />
+          <VStack gap={2} align="stretch">
+            {/* Graphique avec labels */}
+            <Box position="relative" width="100%" height={400}>
+              {/* Label Y (renversé, de bas en haut) */}
+              <Box
+                position="absolute"
+                left="-60px"
+                top="50%"
+                transform="translateY(-50%) rotate(-90deg)"
+                transformOrigin="center"
+                whiteSpace="nowrap"
+              >
+                <Text fontSize="sm" color="fg.muted">
+                  Prix du cours en Dollars US ($)
+                </Text>
+              </Box>
+              <Box id="chart3" width="100%" height="100%" pl="60px">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart>
+                    <XAxis
+                      dataKey="time"
+                      type="number"
+                      scale="time"
+                      domain={chart3XDomain}
+                      tickFormatter={formatTime}
+                      allowDataOverflow={false}
+                      ticks={calculateXAxisTicks}
+                    />
+                    {/* Axe Y gauche pour les prix (utilisé aussi pour les segments positionnés) */}
+                    <YAxis 
+                      yAxisId="left"
+                      domain={chart1YDomain}
+                      tickFormatter={(value) => `$${value.toFixed(2)}`}
+                      ticks={calculateChart1YTicks}
+                    />
                 <Tooltip
                   labelFormatter={(value) => formatTime(Number(value))}
                   formatter={(value: number, name: string) => {
@@ -1284,9 +1935,44 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                     );
                   });
                 })()}
-              </LineChart>
-            </ResponsiveContainer>
-          </Box>
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            </Box>
+            {/* Label X */}
+            <Box textAlign="center" mt={-2}>
+              <Text fontSize="sm" color="fg.muted">
+                Temps en Heure:Minutes
+              </Text>
+            </Box>
+            {/* Légende */}
+            <HStack gap={4} mt={2} pl="60px" flexWrap="wrap">
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#3b82f6" />
+                <Text fontSize="sm" color="fg.muted">
+                  prix du cours du marché en fonction du temps
+                </Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#ef4444" />
+                <Text fontSize="sm" color="fg.muted">
+                  prédiction juste avec une tendance faible
+                </Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#9333ea" />
+                <Text fontSize="sm" color="fg.muted">
+                  prédiction juste avec une tendance forte
+                </Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#000000" />
+                <Text fontSize="sm" color="fg.muted">
+                  prédiction non vérifiable nécessitant un ajustement
+                </Text>
+              </HStack>
+            </HStack>
+          </VStack>
         </Card.Body>
       </Card.Root>
 
@@ -1295,7 +1981,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
         <Card.Header>
           <HStack justify="space-between" align="center" w="100%">
             <Heading size="md" color="fg.default">
-              Graphique avec courbe lissée
+              Graphique 4 : Corrélation comportementale a l'actif {stockData.symbol} le {stockData.date}
             </Heading>
             <Button
               size="sm"
@@ -1309,25 +1995,41 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
           </HStack>
         </Card.Header>
         <Card.Body>
-          <Box id="chart4" width="100%" height={400}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart>
-                <XAxis
-                  dataKey="time"
-                  type="number"
-                  scale="time"
-                  domain={chart3XDomain}
-                  tickFormatter={formatTime}
-                  allowDataOverflow={false}
-                  ticks={calculateXAxisTicks}
-                />
-                {/* Axe Y gauche pour les prix */}
-                <YAxis 
-                  yAxisId="left"
-                  domain={chart1YDomain}
-                  tickFormatter={(value) => `$${value.toFixed(2)}`}
-                  ticks={calculateChart1YTicks}
-                />
+          <VStack gap={2} align="stretch">
+            {/* Graphique avec labels */}
+            <Box position="relative" width="100%" height={400}>
+              {/* Label Y (renversé, de bas en haut) */}
+              <Box
+                position="absolute"
+                left="-60px"
+                top="50%"
+                transform="translateY(-50%) rotate(-90deg)"
+                transformOrigin="center"
+                whiteSpace="nowrap"
+              >
+                <Text fontSize="sm" color="fg.muted">
+                  Prix du cours en Dollars US ($)
+                </Text>
+              </Box>
+              <Box id="chart4" width="100%" height="100%" pl="60px">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart>
+                    <XAxis
+                      dataKey="time"
+                      type="number"
+                      scale="time"
+                      domain={chart3XDomain}
+                      tickFormatter={formatTime}
+                      allowDataOverflow={false}
+                      ticks={calculateXAxisTicks}
+                    />
+                    {/* Axe Y gauche pour les prix */}
+                    <YAxis 
+                      yAxisId="left"
+                      domain={chart1YDomain}
+                      tickFormatter={(value) => `$${value.toFixed(2)}`}
+                      ticks={calculateChart1YTicks}
+                    />
                 <Tooltip
                   labelFormatter={(value) => formatTime(Number(value))}
                   formatter={(value: number, name: string) => {
@@ -1370,7 +2072,7 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                       type="monotone"
                       dataKey="average"
                       data={segment}
-                      stroke="#10b981"
+                      stroke="#ef4444"
                       strokeWidth={3}
                       dot={false}
                       isAnimationActive={false}
@@ -1379,9 +2081,57 @@ export default function StreamResultsClient({ stockData, segments }: StreamResul
                     />
                   )
                 ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </Box>
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            </Box>
+            {/* Label X */}
+            <Box textAlign="center" mt={-2}>
+              <Text fontSize="sm" color="fg.muted">
+                Temps en Heure:Minutes
+              </Text>
+            </Box>
+            {/* Légende */}
+            <HStack gap={4} mt={2} pl="60px" flexWrap="wrap">
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#3b82f6" />
+                <Text fontSize="sm" color="fg.muted">
+                  prix du cours du marché en fonction du temps
+                </Text>
+              </HStack>
+              <HStack gap={2}>
+                <Box width="40px" height="2px" bg="#ef4444" />
+                <Text fontSize="sm" color="fg.muted">
+                  Corrélation comportementale vérifiée à la courbe
+                </Text>
+              </HStack>
+            </HStack>
+            {/* Stats de corrélation */}
+            {(predictionStats || resultStats06) && (
+              <VStack gap={2} mt={4} pl="60px" align="flex-start">
+                {predictionStats && (
+                  <HStack gap={2}>
+                    <Text fontSize="sm" color="fg.muted" fontWeight="medium">
+                      Taux de corrélation moyen :
+                    </Text>
+                    <Text fontSize="sm" fontWeight="bold" color={predictionStats.successRate >= 50 ? "green.600" : "red.600"}>
+                      {predictionStats.successRate.toFixed(2)}%
+                    </Text>
+                  </HStack>
+                )}
+                {resultStats06 && (
+                  <HStack gap={2}>
+                    <Text fontSize="sm" color="fg.muted" fontWeight="medium">
+                      Taux de corrélation à forte intensité :
+                    </Text>
+                    <Text fontSize="sm" fontWeight="bold" color={resultStats06.successRate >= 50 ? "green.600" : "red.600"}>
+                      {resultStats06.successRate.toFixed(2)}%
+                    </Text>
+                  </HStack>
+                )}
+              </VStack>
+            )}
+          </VStack>
         </Card.Body>
       </Card.Root>
     </VStack>
