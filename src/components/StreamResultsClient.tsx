@@ -163,32 +163,25 @@ export default function StreamResultsClient({ stockData, segments, predictionSta
   }, [stockData.data]);
 
   // Calculer les données pour le second graphique (résultats des segments)
+  // Chaque segment commence à son x0 (segmentEnd) aligné sur les minutes, au même Y que la fin du segment précédent
   const segmentResultsData = useMemo(() => {
     if (segments.length === 0) return [];
     
-    // Trouver le segment le plus ancien (celui avec le segmentEnd le plus ancien)
-    let oldestSegmentEndTime: number | null = null;
-    if (segments.length > 0) {
-      const sortedSegments = [...segments].sort((a, b) => {
-        const timeA = new Date(a.segmentEnd).getTime();
-        const timeB = new Date(b.segmentEnd).getTime();
-        return timeA - timeB; // Ordre croissant (le plus ancien en premier)
-      });
-      oldestSegmentEndTime = new Date(sortedSegments[0].segmentEnd).getTime();
-    }
+    // Trier les segments par segmentEnd (x0) pour traiter dans l'ordre chronologique
+    const sortedSegments = [...segments].sort((a, b) => {
+      const timeA = new Date(a.segmentEnd).getTime();
+      const timeB = new Date(b.segmentEnd).getTime();
+      return timeA - timeB; // Ordre croissant (le plus ancien en premier)
+    });
     
     const results: Array<{ time: number; value: number; color: string; segmentId: string; isExtremity?: boolean; pointId?: string }> = [];
     let currentY = 0; // Commence à 0
     let pointCounter = 0; // Compteur pour créer des IDs uniques
-    // Le premier segment commence au segmentEnd du segment le plus ancien (ou au début s'il n'y a pas de segment)
-    const firstSegmentStartTime = oldestSegmentEndTime ?? (allPointsData.length > 0 ? allPointsData[0].timestamp : new Date(segments[0].segmentEnd).getTime());
     
-    // Stocker les Y de départ de chaque segment pour gérer les discontinuités
-    const segmentStartY: Record<string, number> = {};
-    // Stocker le temps de fin réel de chaque segment (après tous les sous-segments)
-    const segmentActualEndTime: Record<string, number> = {};
+    // Stocker le Y de fin de chaque segment pour le segment suivant
+    const segmentEndY: Record<string, number> = {};
     
-    segments.forEach((segment, index) => {
+    sortedSegments.forEach((segment, index) => {
       
       // Parser is_result_correct (peut être une chaîne avec plusieurs valeurs)
       const isCorrectValues = segment.isResultCorrect 
@@ -224,49 +217,23 @@ export default function StreamResultsClient({ stockData, segments, predictionSta
         normalizedCorrect.push(isCorrectValues[i] ?? isCorrectValues[0] ?? 0);
       }
       
-      // Déterminer si le segment précédent était juste
-      let previousWasCorrect = true;
-      if (index > 0) {
-        const prevSegment = segments[index - 1];
-        if (prevSegment.isResultCorrect) {
-          const prevValues = prevSegment.isResultCorrect.trim().split(/\s+/).map(v => parseFloat(v)).filter(v => !isNaN(v));
-          if (prevValues.length > 0) {
-            // Un segment est juste si au moins une valeur est != 0
-            previousWasCorrect = isSegmentCorrect(prevValues);
-          }
-        }
-      }
-      
-      // Déterminer si ce segment est juste
-      const segmentIsCorrect = isSegmentCorrect(normalizedCorrect);
-      
-      // Déterminer le Y de départ
+      // Déterminer le Y de départ : toujours utiliser le Y de fin du segment précédent
       let startY: number;
       if (index === 0) {
         // Premier segment : commence à 0
         startY = 0;
-      } else if (previousWasCorrect) {
-        // Si le précédent était juste, on commence là où il s'est arrêté
-        startY = currentY;
       } else {
-        // Si le précédent était faux, on commence là où il a commencé (discontinuité)
-        const prevSegmentId = segments[index - 1].id;
-        startY = segmentStartY[prevSegmentId] ?? currentY;
+        // Utiliser le Y de fin du segment précédent (même s'il était faux)
+        const prevSegmentId = sortedSegments[index - 1].id;
+        startY = segmentEndY[prevSegmentId] ?? currentY;
       }
       
-      // Stocker le Y de départ de ce segment
-      segmentStartY[segment.id] = startY;
-      
-      // Point de départ du segment
-      // Le premier segment commence à l'origine, les autres au temps de fin réel du précédent
-      let startTime: number;
-      if (index === 0) {
-        startTime = firstSegmentStartTime;
-      } else {
-        // Utiliser le temps de fin réel du segment précédent (après tous ses sous-segments)
-        const prevSegmentId = segments[index - 1].id;
-        startTime = segmentActualEndTime[prevSegmentId] ?? new Date(segments[index - 1].segmentEnd).getTime();
-      }
+      // Point de départ du segment : utiliser segmentEnd (x0) aligné sur les minutes
+      const segmentEndTime = new Date(segment.segmentEnd).getTime();
+      const segmentEndDate = new Date(segmentEndTime);
+      // Arrondir à la minute (mettre les secondes et millisecondes à 0)
+      segmentEndDate.setSeconds(0, 0);
+      const startTime = segmentEndDate.getTime();
       
       // Traiter chaque paire (interval, result, isCorrect) pour créer les sous-segments
       // Les segments noirs sont calculés de la même manière que les segments justes
@@ -321,23 +288,13 @@ export default function StreamResultsClient({ stockData, segments, predictionSta
         currentSegmentY = endY;
       }
       
-      // Stocker le temps de fin réel de ce segment (après tous les sous-segments)
-      segmentActualEndTime[segment.id] = currentTime;
+      // Stocker le Y de fin de ce segment pour le segment suivant
+      segmentEndY[segment.id] = currentSegmentY;
       
       // Mettre à jour currentY pour le prochain segment
-      // Si ce segment était juste, on continue depuis là où il s'est arrêté
-      // Si ce segment était faux, on garde currentY (pas de modification)
-      if (segmentIsCorrect) {
-        currentY = currentSegmentY;
-      }
-      // Sinon, currentY reste inchangé (discontinuité)
+      // Toujours utiliser le Y de fin, même si le segment était faux
+      currentY = currentSegmentY;
     });
-    
-    // Filtrer les résultats pour ne garder que ceux qui commencent après le segmentEnd du segment le plus ancien
-    // (mais l'axe X affichera quand même depuis le début)
-    if (oldestSegmentEndTime !== null) {
-      return results.filter(r => r.time >= oldestSegmentEndTime!);
-    }
     
     return results;
   }, [segments, allPointsData]);

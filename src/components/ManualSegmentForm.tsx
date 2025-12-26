@@ -717,24 +717,34 @@ export default function ManualSegmentForm({
                 Segments traités: {segmentsCount}
               </Badge>
               {(() => {
-                // Calculer le pourcentage de réussite basé sur les segments avec feedback
+                // Calculer la moyenne des valeurs is_result_correct pour les segments avec feedback
                 const segmentsWithFeedback = existingSegments.filter(seg => seg.isResultCorrect !== null && seg.isResultCorrect.trim() !== '');
-                // Compter les segments réussis : ceux avec au moins une valeur >= 0.5
-                const successfulSegments = segmentsWithFeedback.filter(seg => {
-                  if (!seg.isResultCorrect) return false;
-                  const values = seg.isResultCorrect.trim().split(/\s+/).map(v => parseFloat(v));
-                  // Un segment est réussi si au moins une valeur est >= 0.5
-                  return values.some(v => !isNaN(v) && v >= 0.5);
-                });
-                const totalFeedbackSegments = segmentsWithFeedback.length;
-                const successRate = totalFeedbackSegments > 0 
-                  ? ((successfulSegments.length / totalFeedbackSegments) * 100).toFixed(1) 
+                
+                let sumOfResults = 0;
+                let totalValues = 0;
+                
+                for (const seg of segmentsWithFeedback) {
+                  if (!seg.isResultCorrect) continue;
+                  const values = seg.isResultCorrect.trim().split(/\s+/).filter(v => v.trim() !== '');
+                  
+                  for (const valueStr of values) {
+                    const num = parseFloat(valueStr);
+                    if (!isNaN(num) && num >= 0 && num <= 1) {
+                      // is_result_correct est un pourcentage [0,1]
+                      sumOfResults += num;
+                      totalValues++;
+                    }
+                  }
+                }
+                
+                const successRate = totalValues > 0 
+                  ? ((sumOfResults / totalValues) * 100).toFixed(1)
                   : '0';
-                const successFraction = `${successfulSegments.length} / ${totalFeedbackSegments}`;
+                const totalFeedbackSegments = segmentsWithFeedback.length;
                 
                 return (
                   <Badge colorPalette="orange" variant="subtle">
-                    Réussite: {successRate}% ({successFraction})
+                    Réussite: {successRate}% ({totalFeedbackSegments} segments)
                   </Badge>
                 );
               })()}

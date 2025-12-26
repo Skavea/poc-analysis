@@ -1193,8 +1193,11 @@ export class DatabaseService {
         )
         .where(and(...conditions));
 
-      // Compter les différents types de résultats
+      // Calculer la moyenne des valeurs is_result_correct pour les segments valides
+      // ET compter le nombre de juste (au moins une valeur > 0) et faux (toutes valeurs = 0)
       let totalResults = 0;
+      let sumOfResults = 0;
+      let totalValues = 0;
       let resultsCorrect = 0;
       let resultsIncorrect = 0;
 
@@ -1222,37 +1225,46 @@ export class DatabaseService {
         if (hasValidResult) {
           totalResults++;
           
-          // Vérifier si is_result_correct indique un résultat juste ou faux
-          if (isResultCorrect === null) {
-            continue; // Ignorer si is_result_correct est null
-          }
-
-          const trimmed = isResultCorrect.trim();
-          const valuesCorrect = trimmed.split(/\s+/).filter(v => v.trim() !== '');
-          const allZero = valuesCorrect.length > 0 && valuesCorrect.every(v => {
-            const num = parseFloat(v);
-            return !isNaN(num) && num === 0;
-          });
-          
-          const hasPositiveValue = valuesCorrect.some(v => {
-            const num = parseFloat(v);
-            return !isNaN(num) && num > 0;
-          });
-
-          if (hasPositiveValue) {
-            // is_result_correct != 0 et != null -> résultat juste
-            resultsCorrect++;
-          } else if (allZero) {
-            // is_result_correct == 0 et != null -> résultat faux
-            resultsIncorrect++;
+          // Extraire toutes les valeurs de is_result_correct
+          if (isResultCorrect !== null) {
+            const trimmed = isResultCorrect.trim();
+            const valuesCorrect = trimmed.split(/\s+/).filter(v => v.trim() !== '');
+            
+            // Pour le comptage juste/faux : un segment est juste si au moins une valeur > 0, faux si toutes = 0
+            let hasPositiveValue = false;
+            const validValues: number[] = [];
+            
+            for (const valueStr of valuesCorrect) {
+              const num = parseFloat(valueStr);
+              if (!isNaN(num) && num >= 0 && num <= 1) {
+                // is_result_correct est un pourcentage [0,1]
+                validValues.push(num);
+                sumOfResults += num;
+                totalValues++;
+                
+                // Pour le comptage
+                if (num > 0) {
+                  hasPositiveValue = true;
+                }
+              }
+            }
+            
+            // Compter juste/faux au niveau du segment
+            if (validValues.length > 0) {
+              if (hasPositiveValue) {
+                resultsCorrect++;
+              } else {
+                // Toutes les valeurs valides sont 0
+                resultsIncorrect++;
+              }
+            }
           }
         }
       }
 
-      // Calculer le pourcentage de réussite
-      const totalAnswered = resultsCorrect + resultsIncorrect;
-      const successRate = totalAnswered > 0 
-        ? Math.round((resultsCorrect / totalAnswered) * 100 * 100) / 100 // Arrondir à 2 décimales
+      // Calculer la moyenne (successRate en pourcentage)
+      const successRate = totalValues > 0 
+        ? Math.round((sumOfResults / totalValues) * 100 * 100) / 100 // Arrondir à 2 décimales
         : 0;
 
       return {
@@ -1304,11 +1316,14 @@ export class DatabaseService {
         )
         .where(and(...conditions));
 
-      // Compter les différents types de tests
+      // Calculer la moyenne des valeurs is_result_correct
+      // ET compter le nombre de juste (au moins une valeur > 0) et faux (toutes valeurs = 0)
       let totalTests = results.length;
+      let testsUnanswered = 0;
+      let sumOfResults = 0;
+      let totalValues = 0;
       let testsCorrect = 0;
       let testsIncorrect = 0;
-      let testsUnanswered = 0;
 
       for (const result of results) {
         const isResultCorrect = result.isResultCorrect;
@@ -1318,40 +1333,47 @@ export class DatabaseService {
           testsUnanswered++;
         } else {
           // is_result_correct est un text qui peut contenir des valeurs numériques séparées par des espaces
-          // Nombre de tests juste : is_result_correct != null et != 0 (donc > 0, dans l'intervalle ]0,1])
-          // Nombre de tests faux : is_result_correct != null et == 0
+          // Extraire toutes les valeurs et les ajouter à la somme
           const trimmed = isResultCorrect.trim();
-          
-          // Vérifier si toutes les valeurs sont "0"
           const values = trimmed.split(/\s+/).filter(v => v.trim() !== '');
-          const allZero = values.length > 0 && values.every(v => {
-            const num = parseFloat(v);
-            return !isNaN(num) && num === 0;
-          });
           
-          // Vérifier s'il y a au moins une valeur > 0
-          const hasPositiveValue = values.some(v => {
-            const num = parseFloat(v);
-            return !isNaN(num) && num > 0;
-          });
+          // Pour le comptage juste/faux : un segment est juste si au moins une valeur > 0, faux si toutes = 0
+          let hasPositiveValue = false;
+          const validValues: number[] = [];
           
-          if (allZero) {
-            // Toutes les valeurs sont 0 -> test faux
-            testsIncorrect++;
-          } else if (hasPositiveValue) {
-            // Au moins une valeur > 0 -> test juste
-            testsCorrect++;
+          for (const valueStr of values) {
+            const num = parseFloat(valueStr);
+            if (!isNaN(num) && num >= 0 && num <= 1) {
+              // is_result_correct est un pourcentage [0,1]
+              validValues.push(num);
+              sumOfResults += num;
+              totalValues++;
+              
+              // Pour le comptage
+              if (num > 0) {
+                hasPositiveValue = true;
+              }
+            }
+          }
+          
+          // Compter juste/faux au niveau du segment
+          if (validValues.length > 0) {
+            if (hasPositiveValue) {
+              testsCorrect++;
+            } else {
+              // Toutes les valeurs valides sont 0
+              testsIncorrect++;
+            }
           } else {
-            // Chaîne non vide mais valeurs invalides -> considéré comme non répondu
+            // Aucune valeur valide -> considéré comme non répondu
             testsUnanswered++;
           }
         }
       }
 
-      // Calculer le pourcentage de réussite
-      const totalAnswered = testsCorrect + testsIncorrect;
-      const successRate = totalAnswered > 0 
-        ? Math.round((testsCorrect / totalAnswered) * 100 * 100) / 100 // Arrondir à 2 décimales
+      // Calculer la moyenne (successRate en pourcentage)
+      const successRate = totalValues > 0 
+        ? Math.round((sumOfResults / totalValues) * 100 * 100) / 100 // Arrondir à 2 décimales
         : 0;
 
       return {

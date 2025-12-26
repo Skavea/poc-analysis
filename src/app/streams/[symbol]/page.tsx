@@ -77,34 +77,32 @@ async function StreamsListServer({ symbol }: { symbol: string }) {
         ) : (
           <>
             {/* Header avec statistiques globales */}
-            <Card.Root>
-              <Card.Body>
-                <HStack justify="space-between" align="center">
-                  <VStack align="start" gap={2}>
-                    <Heading size="lg" color="fg.default">
-                      {symbol} Streams
-                    </Heading>
-                    <Text color="fg.muted">
-                      {streamsWithDateRanges.length} stream{streamsWithDateRanges.length > 1 ? 's' : ''} available
+            <Box borderWidth="1px" borderRadius="md" p={6} bg="bg.subtle">
+              <HStack justify="space-between" align="center" flexWrap={{ base: "wrap", md: "nowrap" }} gap={4}>
+                <VStack align="start" gap={2}>
+                  <Heading size="lg" color="fg.default">
+                    {symbol} Streams
+                  </Heading>
+                  <Text color="fg.muted">
+                    {streamsWithDateRanges.length} stream{streamsWithDateRanges.length > 1 ? 's' : ''} available
+                  </Text>
+                </VStack>
+                <HStack gap={4}>
+                  <HStack gap={2}>
+                    <Database size={16} color="var(--chakra-colors-gray-500)" />
+                    <Text fontSize="sm" color="fg.muted">
+                      {streamsWithDateRanges.reduce((sum, stream) => sum + stream.totalPoints, 0).toLocaleString()} total points
                     </Text>
-                  </VStack>
-                  <HStack gap={4}>
-                    <HStack gap={2}>
-                      <Database size={16} color="var(--chakra-colors-gray-500)" />
-                      <Text fontSize="sm" color="fg.muted">
-                        {streamsWithDateRanges.reduce((sum, stream) => sum + stream.totalPoints, 0).toLocaleString()} total points
-                      </Text>
-                    </HStack>
-                    <HStack gap={2}>
-                      <BarChart3 size={16} color="var(--chakra-colors-gray-500)" />
-                      <Text fontSize="sm" color="fg.muted">
-                        {segmentCountsBySymbol[symbol.toUpperCase()] ?? 0} total segments
-                      </Text>
-                    </HStack>
+                  </HStack>
+                  <HStack gap={2}>
+                    <BarChart3 size={16} color="var(--chakra-colors-gray-500)" />
+                    <Text fontSize="sm" color="fg.muted">
+                      {segmentCountsBySymbol[symbol.toUpperCase()] ?? 0} total segments
+                    </Text>
                   </HStack>
                 </HStack>
-              </Card.Body>
-            </Card.Root>
+              </HStack>
+            </Box>
 
             {/* Liste des streams */}
             <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)" }} gap={6}>
