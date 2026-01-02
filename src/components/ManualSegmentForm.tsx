@@ -131,7 +131,7 @@ export default function ManualSegmentForm({
   }, [existingSegments, allPoints, getLastSegmentByCreatedAt]);
 
   const [startIndex, setStartIndex] = useState(getStartIndex);
-  const [pointsToDisplay, setPointsToDisplay] = useState(60); // Nombre de points à afficher (30-180)
+  const [pointsToDisplay, setPointsToDisplay] = useState(60); // Nombre de points à afficher (30-300, soit jusqu'à 5h)
   const [selectedPoints, setSelectedPoints] = useState<string[]>([]);
   const [schemaType, setSchemaType] = useState<'R' | 'V' | 'UNCLASSIFIED'>('UNCLASSIFIED');
   const [patternPoint, setPatternPoint] = useState<string | null>(null);
@@ -245,7 +245,7 @@ export default function ManualSegmentForm({
   
   // Fonction pour augmenter la plage (chevron droit)
   const handleIncreaseRange = () => {
-    const newPointsToDisplay = Math.min(180, pointsToDisplay + 30);
+    const newPointsToDisplay = Math.min(300, pointsToDisplay + 30);
     const maxEndIndex = allPoints.length;
     
     // Vérifier qu'on ne dépasse pas la fin des données
@@ -259,7 +259,7 @@ export default function ManualSegmentForm({
   
   // Vérifier si les boutons doivent être désactivés
   const canDecrease = pointsToDisplay > 30 && (startIndex + pointsToDisplay - 30) >= getMinEndIndex();
-  const canIncrease = pointsToDisplay < 180 && (startIndex + pointsToDisplay + 30) <= allPoints.length;
+  const canIncrease = pointsToDisplay < 300 && (startIndex + pointsToDisplay + 30) <= allPoints.length;
 
   // Trouver les points extrêmes du dernier segment pour l'affichage
   const lastSegmentPoints = useMemo(() => {
