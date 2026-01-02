@@ -226,7 +226,9 @@ export default function ManualSegmentForm({
   
   // Fonction pour réduire la plage (chevron gauche)
   const handleDecreaseRange = () => {
-    const newPointsToDisplay = Math.max(30, pointsToDisplay - 30);
+    // Réduire de 60 points à la fois pour être cohérent avec l'augmentation
+    const decrement = 60;
+    const newPointsToDisplay = Math.max(30, pointsToDisplay - decrement);
     const minEndIndex = getMinEndIndex();
     const currentEndIndex = startIndex + pointsToDisplay;
     
@@ -245,12 +247,16 @@ export default function ManualSegmentForm({
   
   // Fonction pour augmenter la plage (chevron droit)
   const handleIncreaseRange = () => {
-    const newPointsToDisplay = Math.min(300, pointsToDisplay + 30);
+    // Augmenter de 60 points à la fois pour aller plus vite, jusqu'à 300 points max
+    const increment = 60;
+    const newPointsToDisplay = Math.min(300, pointsToDisplay + increment);
     const maxEndIndex = allPoints.length;
     
     // Vérifier qu'on ne dépasse pas la fin des données
     if (startIndex + newPointsToDisplay > maxEndIndex) {
-      setPointsToDisplay(maxEndIndex - startIndex);
+      // Si on peut aller jusqu'à 300 points, le faire, sinon aller jusqu'à la fin
+      const maxPossible = Math.min(300, maxEndIndex - startIndex);
+      setPointsToDisplay(maxPossible);
       return;
     }
     
@@ -258,8 +264,11 @@ export default function ManualSegmentForm({
   };
   
   // Vérifier si les boutons doivent être désactivés
-  const canDecrease = pointsToDisplay > 30 && (startIndex + pointsToDisplay - 30) >= getMinEndIndex();
-  const canIncrease = pointsToDisplay < 300 && (startIndex + pointsToDisplay + 30) <= allPoints.length;
+  const canDecrease = pointsToDisplay > 30 && (startIndex + pointsToDisplay - 60) >= getMinEndIndex();
+  // Permettre d'augmenter tant qu'on n'a pas atteint 300 points et qu'il reste des points disponibles
+  // On peut augmenter si on est en dessous de 300 ET qu'il reste au moins un point disponible
+  const maxPossiblePoints = Math.min(300, allPoints.length - startIndex);
+  const canIncrease = pointsToDisplay < maxPossiblePoints;
 
   // Trouver les points extrêmes du dernier segment pour l'affichage
   const lastSegmentPoints = useMemo(() => {
